@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistant Vocal Intelligent</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Assistant Vocal Intelligent</h1>
+            <p class="subtitle">Actualités en temps réel</p>
+        </header>
+
+        <section class="voice-section">
+            <button id="micButton" class="mic-btn">🎤</button>
+            <p class="voice-status" id="status">Cliquez sur le microphone pour commencer</p>
+        </section>
+
+        <section class="search-section">
+            <input type="text" id="searchInput" placeholder="Rechercher un sujet...">
+            <button class="search-btn" id="searchButton">Rechercher</button>
+        </section>
+
+        <!-- Added debug section -->
+        <section class="debug-section" id="debug-section">
+            <details>
+                <summary>Debug Info</summary>
+                <pre id="debug-info"></pre>
+            </details>
+        </section>
+
+        <section class="results-section">
+            <div id="loading" class="loading-indicator">Chargement des actualités...</div>
+            <div id="news-container" class="news-container"></div>
+        </section>
+    </div>
+
+    <!-- Added error handling -->
+    <script>
+        window.onerror = function(msg, url, line) {
+            const debugInfo = document.getElementById('debug-info');
+            if (debugInfo) {
+                debugInfo.textContent += `Error: ${msg}\nURL: ${url}\nLine: ${line}\n\n`;
+            }
+            return false;
+        };
+    </script>
+    <script src="app.js"></script>
+</body>
+</html>
