@@ -470,35 +470,90 @@ def classify_endpoint():
         return jsonify({"error": "internal_error", "message": str(e)}), 500
 
 # ============================================
-# JOURNALISATION DES RECHERCHES
+# JOURNALISATION DES RECHERCHES dans azure blob
 # ============================================
 
-LOG_CSV = os.path.join(os.path.dirname(__file__), "search_log.csv")
+from azure.storage.blob import BlobServiceClient
+from azure.core.exceptions import AzureError
+import io
+
+# Configuration Azure Blob Storage
+AZURE_STORAGE_CONNECTION_STRING = os.getenv('AZURE_STORAGE_CONNECTION_STRING')
+AZURE_CONTAINER_NAME = os.getenv('AZURE_CONTAINER_NAME', 'search-logs')
+AZURE_BLOB_NAME = 'search_log.csv'
+
+# Cache du client Blob pour réutilisation
+_blob_client = None
+
+
 _csv_lock = threading.Lock()
 
-def _ensure_log_file():
-    """Créer le CSV avec en-tête s'il n'existe pas."""
-    if not os.path.exists(LOG_CSV):
+def _get_blob_client():
+    """Obtient ou crée un client Blob Storage."""
+    global _blob_client
+    
+    if _blob_client is None and AZURE_STORAGE_CONNECTION_STRING:
         try:
-            with open(LOG_CSV, "w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow(["timestamp_utc", "query", "category", "method"])
-            logger.info(f"Created search log: {LOG_CSV}")
+            # Créer le client de service Blob
+            blob_service = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+            
+            # Créer le conteneur s'il n'existe pas
+            try:
+                container_client = blob_service.create_container(AZURE_CONTAINER_NAME)
+            except Exception:
+                container_client = blob_service.get_container_client(AZURE_CONTAINER_NAME)
+            
+            # Obtenir le client pour notre blob
+            _blob_client = container_client.get_blob_client(AZURE_BLOB_NAME)
+            
+            # Créer le fichier avec l'en-tête s'il n'existe pas
+            try:
+                _blob_client.get_blob_properties()
+            except Exception:
+                header = "timestamp_utc,query,category,method\n"
+                _blob_client.upload_blob(header, blob_type="AppendBlob", overwrite=True)
+                
+            logger.info("Azure Blob Storage client initialized successfully")
+            
         except Exception as e:
-            logger.warning(f"Unable to create search log file: {e}")
+            logger.error(f"Failed to initialize Azure Blob Storage: {e}")
+            _blob_client = None
+    
+    return _blob_client
 
 def log_search(query, category, method="unknown"):
-    """Append a search row to CSV (thread-safe)."""
+    """Enregistre une recherche dans Azure Blob Storage."""
     try:
-        _ensure_log_file()
+        blob_client = _get_blob_client()
+        if not blob_client:
+            logger.warning("Azure Blob Storage not configured, logging disabled")
+            return
+            
         ts = datetime.utcnow().isoformat() + "Z"
+        
+        # Créer la ligne CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([ts, query, category, method])
+        log_line = output.getvalue()
+        
+        # Ajouter au blob de manière thread-safe
         with _csv_lock:
-            with open(LOG_CSV, "a", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow([ts, query, category, method])
-        logger.info(f"Logged search: {ts} | {query!r} -> {category!r} ({method})")
+            try:
+                blob_client.append_block(log_line)
+                logger.info(f"Logged search to Azure: {ts} | {query!r} -> {category!r} ({method})")
+            except Exception as e:
+                if "BlobNotFound" in str(e):
+                    # Le blob n'existe pas, on le crée
+                    header = "timestamp_utc,query,category,method\n"
+                    blob_client.upload_blob(header + log_line, blob_type="AppendBlob", overwrite=True)
+                else:
+                    raise
+                    
     except Exception as e:
-        logger.warning(f"Failed to log search: {e}")
+        logger.warning(f"Failed to log search to Azure: {e}")
+        # En cas d'erreur, on continue l'exécution normale de l'application
+
 
 def filter_articles_by_topic(articles, topic):
     """Filtre les articles par topic avec recherche élargie et correspondances partielles"""
