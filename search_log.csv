@@ -1,0 +1,66 @@
+timestamp_utc,query,category,method
+2025-10-30T18:23:03.319291Z,je veux des actualités sur le sport,sport,classify
+2025-10-30T18:23:07.945937Z,sport,sport,direct
+2025-10-30T18:23:15.422863Z,je veux des actualités sur la politique,politique,classify
+2025-10-30T18:23:19.380149Z,politique,politique,direct
+2025-10-30T18:24:00.515785Z,sante,santé,classify
+2025-10-30T18:24:04.811434Z,santé,santé,direct
+2025-11-03T18:01:27.621881Z,Je veux savoir les nouveautés sur la politique.,politique,classify
+2025-11-03T18:01:29.577001Z,politique,politique,direct
+2025-11-03T18:01:41.085899Z,Je veux savoir les nouveautés à propos de la santé.,santé,classify
+2025-11-03T18:01:43.190988Z,santé,santé,direct
+2025-11-03T18:01:49.186765Z,santé.,santé,classify
+2025-11-03T18:01:51.273286Z,santé,santé,direct
+2025-11-03T18:02:01.139160Z,Je veux savoir les nouveautés à propos du sport.,sport,classify
+2025-11-03T18:02:03.073508Z,sport,sport,direct
+2025-11-03T18:02:40.771628Z,Je veux savoir le les nouveautés sur le voyage.,autre,classify
+2025-11-03T18:02:43.132573Z,je veux savoir le les nouveautés sur le voyage.,je veux savoir le les nouveautés sur le voyage.,direct
+2025-11-03T18:02:50.087327Z,politique,politique,classify
+2025-11-03T18:02:52.031710Z,politique,politique,direct
+2025-11-03T18:02:57.386477Z,sport,sport,classify
+2025-11-03T18:02:59.282000Z,sport,sport,direct
+2025-11-03T18:03:18.359998Z,Je veux savoir les nouveautés sur l'économie.,économie,classify
+2025-11-03T18:03:20.471599Z,économie,économie,direct
+2025-11-03T18:03:36.658310Z,Je veux savoir les nouveautés sur l'éducation.,éducation,classify
+2025-11-03T18:03:38.798362Z,éducation,éducation,direct
+2025-11-03T18:06:04.201757Z,Je veux savoir les nouveautés de la politique.,politique,classify
+2025-11-03T18:06:06.322185Z,politique,politique,direct
+2025-11-03T18:08:14.563255Z,je savoir les actualites de la politique,politique,classify
+2025-11-03T18:08:17.596252Z,politique,politique,direct
+2025-11-03T18:10:41.572296Z,politique,politique,classify
+2025-11-03T18:10:43.510319Z,politique,politique,direct
+2025-11-03T18:16:25.415577Z,je veux savoir les nouveautes de la sante,santé,classify
+2025-11-03T18:16:25.426679Z,santé,santé,direct
+2025-11-03T18:18:13.859191Z,je veux savoir les nouveautes de la sante,santé,classify
+2025-11-03T18:18:13.875660Z,santé,santé,direct
+2025-11-03T18:18:24.496472Z,je veux savoir les nouveautes de la sante,santé,classify
+2025-11-03T18:18:24.509733Z,santé,santé,direct
+2025-11-03T18:25:35.512034Z,je veux savoir les nouveautes de la sante,santé,classify
+2025-11-03T18:25:45.319043Z,je veux savoir les nouveautes de la politique,politique,classify
+2025-11-03T18:25:57.414626Z,je veux savoir les nouveautes de la economie,économie,classify
+2025-11-03T18:31:26.712144Z,je veux savoir les nouveautes de la economie,économie,classify
+2025-11-03T18:31:37.605169Z,je veux savoir les nouveautes de la politique,politique,classify
+2025-11-03T18:31:44.382090Z,je veux savoir les nouveautes de la sport,sport,classify
+2025-11-03T18:35:26.373453Z,je veux savoir les nouveautes de la sport,sport,classify
+2025-11-03T20:12:09.836589Z,Je veux des actualités sur le sport,sport,classify
+2025-11-03T20:12:23.683512Z,Je veux des actualités sur la politique,politique,classify
+2025-11-03T20:25:29.078665Z,sport,sport,direct
+2025-11-03T20:27:41.144829Z,sport,sport,direct
+2025-11-03T20:28:10.241594Z,politique,politique,direct
+2025-11-03T20:28:24.756172Z,politique,politique,classify
+2025-11-03T20:29:46.931078Z,Je veux des actualités sur la politique.,politique,classify
+2025-11-03T20:30:20.056344Z,Je veux des actualités sur l'economie.,économie,classify
+2025-11-03T20:33:25.485875Z,Je veux des actualités sur l'economie.,économie,classify
+2025-11-03T20:38:46.144673Z,je veux des nouveautés sur l'economie,économie,classify
+2025-11-03T20:45:05.376971Z,Les politiques ?,politique,classify
+2025-11-03T20:45:09.514681Z,Les politiques ?,politique,classify
+2025-11-03T20:51:53.710146Z,sport,sport,classify
+2025-11-03T20:56:53.456474Z,sport,sport,classify
+2025-11-03T20:57:03.102223Z,technologie,technologie,classify
+2025-11-03T20:57:05.604879Z,technologie,technologie,classify
+2025-11-04T16:42:30.530809Z,sport,sport,classify
+2025-11-04T16:43:32.037146Z,donne moi les actualites de sport,sport,classify
+2025-11-04T16:45:28.036356Z,donne moi les actualites de culture,culture,classify
+2025-11-04T16:45:53.403192Z,donne moi les actualites de alimentaire,alimentaire,classify
+2025-11-04T16:46:15.573287Z,donne moi les actualites de météo,météo,classify
+2025-11-04T16:47:08.106735Z,donne moi les actualites de justice,justice,classify

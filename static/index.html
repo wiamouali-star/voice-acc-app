@@ -3,50 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Assistant Vocal Intelligent</title>
+    <title>Assistant Vocal Intelligent - Actualités</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
+        <!-- En-tête avec navigation -->
         <header class="header">
-            <h1>Assistant Vocal Intelligent</h1>
-            <p class="subtitle">Actualités en temps réel</p>
+            <div class="header-content">
+                <h1>🎙️ Assistant Vocal Actualités</h1>
+                <p class="subtitle">Découvrez l'actualité par la voix ou le texte</p>
+            </div>
         </header>
 
-        <section class="voice-section">
-            <button id="micButton" class="mic-btn">🎤</button>
-            <p class="voice-status" id="status">Cliquez sur le microphone pour commencer</p>
+        <!-- Section d'instructions -->
+        <section class="instructions-card">
+            <div class="instructions-header">
+                <h2>🚀 Comment utiliser</h2>
+                <span class="help-icon">?</span>
+            </div>
+            <div class="instructions-grid">
+                <div class="instruction-item">
+                    <div class="instruction-icon">🎤</div>
+                    <h3>Recherche Vocale</h3>
+                    <p>Cliquez sur le microphone et parlez naturellement</p>
+                </div>
+                <div class="instruction-item">
+                    <div class="instruction-icon">⌨️</div>
+                    <h3>Recherche Texte</h3>
+                    <p>Saisissez votre sujet et appuyez sur Entrée</p>
+                </div>
+                <div class="instruction-item">
+                    <div class="instruction-icon">📰</div>
+                    <h3>Catégories</h3>
+                    <p>Sport, Politique, Technologie, Économie, Santé...</p>
+                </div>
+            </div>
         </section>
 
+        <!-- Section de recherche principale -->
         <section class="search-section">
-            <input type="text" id="searchInput" placeholder="Rechercher un sujet...">
-            <button class="search-btn" id="searchButton">Rechercher</button>
+            <!-- Recherche vocale -->
+            <div class="voice-search-card">
+                <div class="voice-header">
+                    <h3>Recherche Vocale</h3>
+                    <div class="voice-indicator" id="voiceIndicator"></div>
+                </div>
+                <button id="micButton" class="mic-btn">
+                    <span class="mic-icon">🎤</span>
+                    <span class="mic-text">Parler</span>
+                </button>
+                <p class="voice-status" id="status">Prêt à écouter</p>
+            </div>
+
+            <!-- Recherche texte -->
+            <div class="text-search-card">
+                <h3>Recherche Texte</h3>
+                <div class="search-input-group">
+                    <input type="text" id="searchInput" placeholder="Ex: actualités sport, politique internationale...">
+                    <button class="search-btn" id="searchButton">
+                        <span class="search-icon">🔍</span>
+                        Rechercher
+                    </button>
+                </div>
+                <div class="quick-topics">
+                    <span class="quick-label">Sujets rapides:</span>
+                    <button class="topic-tag" data-topic="sport">Sport</button>
+                    <button class="topic-tag" data-topic="politique">Politique</button>
+                    <button class="topic-tag" data-topic="technologie">Technologie</button>
+                    <button class="topic-tag" data-topic="économie">Économie</button>
+                </div>
+            </div>
         </section>
 
-        <!-- Added debug section -->
-        <section class="debug-section" id="debug-section">
-            <details>
-                <summary>Debug Info</summary>
-                <pre id="debug-info"></pre>
-            </details>
+        <!-- Statistiques et informations -->
+        <section class="stats-section" id="statsSection" style="display: none;">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <span class="stat-number" id="articlesCount">0</span>
+                    <span class="stat-label">Articles trouvés</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="sourcesCount">0</span>
+                    <span class="stat-label">Sources</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="categoryName">-</span>
+                    <span class="stat-label">Catégorie</span>
+                </div>
+            </div>
         </section>
 
+        <!-- Résultats -->
         <section class="results-section">
-            <div id="loading" class="loading-indicator">Chargement des actualités...</div>
-            <div id="news-container" class="news-container"></div>
+            <div class="results-header">
+                <h2 id="resultsTitle">📰 Actualités du jour</h2>
+                <div class="results-controls">
+                    <button class="filter-btn" id="sortNewest">Plus récents</button>
+                    <button class="filter-btn" id="sortOldest">Plus anciens</button>
+                </div>
+            </div>
+
+            <div id="loading" class="loading-indicator">
+                <div class="loading-spinner"></div>
+                <p>Recherche d'actualités en cours...</p>
+            </div>
+
+            <div id="news-container" class="news-grid">
+                <!-- Les articles s'afficheront ici -->
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination" id="pagination" style="display: none;">
+                <button class="page-btn" id="prevPage">← Précédent</button>
+                <span class="page-info" id="pageInfo">Page 1</span>
+                <button class="page-btn" id="nextPage">Suivant →</button>
+            </div>
         </section>
+
+        <!-- Pied de page -->
+        <footer class="footer">
+            <div class="footer-content">
+                <p>Powered by Mistral AI • Sources: Le Monde, France 24, BBC, 20 Minutes</p>
+                <p class="footer-note">Dernière mise à jour: <span id="lastUpdate"></span></p>
+            </div>
+        </footer>
     </div>
 
-    <!-- Added error handling -->
-    <script>
-        window.onerror = function(msg, url, line) {
-            const debugInfo = document.getElementById('debug-info');
-            if (debugInfo) {
-                debugInfo.textContent += `Error: ${msg}\nURL: ${url}\nLine: ${line}\n\n`;
-            }
-            return false;
-        };
-    </script>
     <script src="app.js"></script>
 </body>
 </html>
