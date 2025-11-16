@@ -405,15 +405,6 @@ def test_frontend():
     return jsonify(test_data)
 
 
-@app.route("/bot-token")
-def get_bot_token():
-    r = requests.post(
-        "https://directline.botframework.com/v3/directline/tokens/generate",
-        headers={"Authorization": f"Bearer {DIRECT_LINE_SECRET}"}
-    )
-    return jsonify(r.json())
-
-
 @app.route("/api/bot-token", methods=['GET'])
 def get_bot_token():
     """Génère un token Direct Line pour le frontend"""
