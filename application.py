@@ -17,6 +17,8 @@ import json
 import unicodedata
 import csv
 import threading
+import requests
+
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO)
@@ -26,6 +28,9 @@ app = Flask(__name__, static_folder='static', static_url_path='')
 
 # Configuration CORS
 CORS(app)
+
+load_dotenv()
+DIRECT_LINE_SECRET = os.environ["DIRECT_LINE_SECRET"]
 
 # Configuration Flask-Limiter avec stockage mémoire (OK pour développement)
 limiter = Limiter(
@@ -398,6 +403,15 @@ def test_frontend():
         }
     ]
     return jsonify(test_data)
+
+
+@app.route("/bot-token")
+def get_bot_token():
+    r = requests.post(
+        "https://directline.botframework.com/v3/directline/tokens/generate",
+        headers={"Authorization": f"Bearer {DIRECT_LINE_SECRET}"}
+    )
+    return jsonify(r.json())
 
 # ============================================
 # CLASSIFICATION AVEC VALIDATION

@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Assistant Vocal Intelligent - Actualités</title>
     <link rel="stylesheet" href="style.css">
+
+    <!-- Script WebChat (Bot Framework) -->
+    <script src="https://cdn.botframework.com/botframework-webchat/latest/webchat.js"
+            crossorigin="anonymous"></script>
 </head>
 <body>
     <div class="container">
@@ -60,7 +64,8 @@
             <div class="text-search-card">
                 <h3>Recherche Texte</h3>
                 <div class="search-input-group">
-                    <input type="text" id="searchInput" placeholder="Ex: actualités sport, politique internationale...">
+                    <input type="text" id="searchInput"
+                           placeholder="Ex: actualités sport, politique internationale...">
                     <button class="search-btn" id="searchButton">
                         <span class="search-icon">🔍</span>
                         Rechercher
@@ -109,9 +114,8 @@
                 <p>Recherche d'actualités en cours...</p>
             </div>
 
-            <div id="news-container" class="news-grid">
-                <!-- Les articles s'afficheront ici -->
-            </div>
+            <!-- Les cartes d’actualités seront injectées ici par app.js -->
+            <div id="news-container" class="news-grid"></div>
 
             <!-- Pagination -->
             <div class="pagination" id="pagination" style="display: none;">
@@ -120,6 +124,24 @@
                 <button class="page-btn" id="nextPage">Suivant →</button>
             </div>
         </section>
+
+        <!-- Fenêtre modale du chatbot -->
+        <div id="webchat-modal"
+             style="display:none; position:fixed; right:20px; bottom:20px;
+                    width:400px; height:500px; border:1px solid #ccc;
+                    background:white; z-index:9999; border-radius:8px;
+                    box-shadow:0 0 15px rgba(0,0,0,0.25);">
+            <div style="height:40px; display:flex; align-items:center;
+                        justify-content:space-between; padding:0 10px;
+                        border-bottom:1px solid #eee;">
+                <span id="webchat-title">Discussion sur l’actualité</span>
+                <button id="webchat-close"
+                        style="border:none; background:transparent;
+                               font-size:18px; cursor:pointer;">✕</button>
+            </div>
+            <!-- Conteneur dans lequel WebChat sera rendu par app.js -->
+            <div id="webchat-container" style="width:100%; height:calc(100% - 40px);"></div>
+        </div>
 
         <!-- Pied de page -->
         <footer class="footer">
@@ -130,6 +152,7 @@
         </footer>
     </div>
 
+    <!-- Ton JS applicatif -->
     <script src="app.js"></script>
 </body>
 </html>

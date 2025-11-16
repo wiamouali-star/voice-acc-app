@@ -98,6 +98,11 @@ function formatDate(dateString) {
 let isListening = false;
 let recognition = null;
 
+// État du chat
+let currentChatArticle = null;
+let conversationId = null;
+let isWaitingForResponse = false;
+
 // Classification
 async function classifyQuery(query) {
     try {
@@ -249,9 +254,9 @@ async function handleSearch() {
 
 // FONCTION PRINCIPALE CORRIGÉE - loadNews
 /**
- * 异步加载新闻数据函数
- * @param {string} topic - 新闻主题，可选参数
- * @param {boolean} isSearch - 是否为搜索模式，可选参数，默认为false
+ * 
+ * @param {string} topic 
+ * @param {boolean} isSearch 
  */
 async function loadNews(topic = '', isSearch = false) {
     console.log('📰 Chargement des actualités, topic:', topic, 'isSearch:', isSearch);
@@ -336,9 +341,12 @@ function displayArticles(articles, topic) {
                          article.pubDate ? formatDate(article.pubDate) : 
                          article.date ? formatDate(article.date) : '';
         
-        // Utiliser le format CARTE au lieu du format texte
+        // Créer un ID unique pour cet article
+        const articleId = `article_${index}_${Date.now()}`;
+        
+        // Utiliser le format CARTE avec bouton de chat
         return `
-            <div class="article-card fade-in">
+            <div class="article-card fade-in" data-article-id="${articleId}">
                 <div class="article-image">
                     ${getArticleIcon(source)}
                 </div>
@@ -355,6 +363,18 @@ function displayArticles(articles, topic) {
                                 Lire l'article →
                             </a>
                         ` : ''}
+                    </div>
+                    <div class="article-actions">
+                        <button
+                        class="chat-btn"
+                        onclick="openChatForArticle(
+                            '${articleId}',
+                            '${title.replace(/'/g, "\\'")}',
+                            '${link.replace(/'/g, "\\'")}'
+                        )">
+                        💬 Discuter avec le bot
+                        </button>
+
                     </div>
                 </div>
             </div>
@@ -464,7 +484,7 @@ function displayError(message) {
 
 // Gestion des catégories
 function initializeCategoryButtons() {
-    const categoryButtons = document.querySelectorAll('.category-btn');
+    const categoryButtons = document.querySelectorAll('.topic-tag');
     categoryButtons.forEach(button => {
         button.addEventListener('click', async () => {
             // Retirer la classe active de tous les boutons
@@ -520,6 +540,8 @@ async function initializeApp() {
     
     // Initialisation des vues
     initializeViewButtons();
+
+    initializeChatModal(); 
     
     // Chargement initial
     try {
@@ -639,4 +661,55 @@ async function initializeApp() {
         console.error('❌ Erreur initialisation:', error);
         displayError('Erreur lors du chargement initial');
     }
+}
+
+
+async function openChatForArticle(id, title, url) {
+  // Afficher le conteneur du chat
+  document.getElementById('webchat-modal').style.display = 'block';
+
+  // Récupérer un token côté serveur Flask
+  const res = await fetch('/bot-token');
+  const { token } = await res.json();
+
+  const { createDirectLine, createStore, renderWebChat } = window.WebChat;
+
+  // On garde l'article dans une variable JS
+  const selectedNews = { id, title, url };
+
+  const store = createStore({}, ({ dispatch }) => next => action => {
+    // Quand la connexion Direct Line est prête,
+    // on envoie un EVENT 'newsSelected' au bot avec les infos de la news
+    if (action.type === 'DIRECT_LINE/CONNECT_FULFILLED') {
+      dispatch({
+        type: 'WEB_CHAT/SEND_EVENT',
+        payload: {
+          name: 'newsSelected',
+          value: selectedNews
+        }
+      });
+    }
+    return next(action);
+  });
+
+  renderWebChat({
+    directLine: createDirectLine({ token }),
+    store,
+    userID: 'user-' + Math.random().toString(36).substr(2, 9)
+  }, document.getElementById('webchat-container'));
+}
+
+
+function initializeChatModal() {
+  const closeBtn = document.getElementById('webchat-close');
+  const modal = document.getElementById('webchat-modal');
+
+  if (closeBtn && modal) {
+    closeBtn.addEventListener('click', () => {
+      modal.style.display = 'none';
+      // Optionnel : vider le contenu pour repartir propre
+      const container = document.getElementById('webchat-container');
+      if (container) container.innerHTML = '';
+    });
+  }
 }
