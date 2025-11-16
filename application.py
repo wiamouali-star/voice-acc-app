@@ -413,6 +413,45 @@ def get_bot_token():
     )
     return jsonify(r.json())
 
+
+@app.route("/api/bot-token", methods=['GET'])
+def get_bot_token():
+    """Génère un token Direct Line pour le frontend"""
+    try:
+        # Utiliser la clé Direct Line depuis les variables d'environnement
+        direct_line_secret = os.getenv('DIRECT_LINE_SECRET')
+        
+        if not direct_line_secret:
+            logger.error("DIRECT_LINE_SECRET non configurée")
+            return jsonify({"error": "Configuration bot manquante"}), 500
+        
+        # Générer le token via l'API Direct Line
+        headers = {
+            'Authorization': f'Bearer {direct_line_secret}',
+            'Content-Type': 'application/json'
+        }
+        
+        response = requests.post(
+            "https://directline.botframework.com/v3/directline/tokens/generate",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            token_data = response.json()
+            logger.info("Token Direct Line généré avec succès")
+            return jsonify(token_data)
+        else:
+            logger.error(f"Erreur Direct Line: {response.status_code} - {response.text}")
+            return jsonify({"error": "Erreur de génération de token"}), 500
+            
+    except requests.exceptions.Timeout:
+        logger.error("Timeout lors de la génération du token Direct Line")
+        return jsonify({"error": "Timeout de connexion"}), 504
+    except Exception as e:
+        logger.error(f"Erreur génération token: {str(e)}")
+        return jsonify({"error": "Erreur interne du serveur"}), 500
+
 # ============================================
 # CLASSIFICATION AVEC VALIDATION
 # ============================================
