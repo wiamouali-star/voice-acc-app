@@ -665,40 +665,102 @@ async function initializeApp() {
 
 
 async function openChatForArticle(id, title, url) {
-  // Afficher le conteneur du chat
-  document.getElementById('webchat-modal').style.display = 'block';
-
-  // Récupérer un token côté serveur Flask
-  const res = await fetch('/bot-token');
-  const { token } = await res.json();
-
-  const { createDirectLine, createStore, renderWebChat } = window.WebChat;
-
-  // On garde l'article dans une variable JS
-  const selectedNews = { id, title, url };
-
-  const store = createStore({}, ({ dispatch }) => next => action => {
-    // Quand la connexion Direct Line est prête,
-    // on envoie un EVENT 'newsSelected' au bot avec les infos de la news
-    if (action.type === 'DIRECT_LINE/CONNECT_FULFILLED') {
-      dispatch({
-        type: 'WEB_CHAT/SEND_EVENT',
-        payload: {
-          name: 'newsSelected',
-          value: selectedNews
+    console.log('💬 Ouverture du chat pour l\'article:', { id, title, url });
+    
+    try {
+        // Afficher le modal
+        const modal = document.getElementById('webchat-modal');
+        const container = document.getElementById('webchat-container');
+        
+        if (!modal || !container) {
+            console.error('❌ Éléments WebChat non trouvés');
+            return;
         }
-      });
+        
+        modal.style.display = 'block';
+        
+        // Vider le conteneur précédent
+        container.innerHTML = '<div style="padding:20px;text-align:center;">Chargement du chatbot...</div>';
+        
+        // Récupérer le token depuis le backend Flask
+        const response = await fetch('/api/bot-token');
+        
+        if (!response.ok) {
+            throw new Error(`Erreur HTTP: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.token) {
+            throw new Error('Token non reçu du serveur');
+        }
+        
+        console.log('✅ Token Direct Line reçu');
+        
+        const { createDirectLine, createStore, renderWebChat } = window.WebChat;
+        
+        // Données de l'article
+        const selectedNews = { 
+            id: id, 
+            title: title, 
+            url: url,
+            timestamp: new Date().toISOString()
+        };
+        
+        // Configuration du store pour envoyer l'événement
+        const store = createStore({}, ({ dispatch }) => next => action => {
+            if (action.type === 'DIRECT_LINE/CONNECT_FULFILLED') {
+                console.log('🚀 Connexion Direct Line établie, envoi de l\'événement...');
+                
+                dispatch({
+                    type: 'WEB_CHAT/SEND_EVENT',
+                    payload: {
+                        name: 'newsSelected',
+                        value: selectedNews
+                    }
+                });
+            }
+            return next(action);
+        });
+        
+        // Options de style
+        const styleOptions = {
+            bubbleBackground: 'rgba(0, 120, 215, 0.1)',
+            bubbleFromUserBackground: 'rgba(0, 120, 215, 0.2)',
+            hideUploadButton: true,
+            sendBoxBackground: '#f0f0f0'
+        };
+        
+        // Rendre WebChat
+        renderWebChat({
+            directLine: createDirectLine({ 
+                token: data.token 
+            }),
+            store: store,
+            styleOptions: styleOptions,
+            userID: 'user-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+            username: 'Utilisateur Actualités',
+            locale: 'fr-FR'
+        }, container);
+        
+        console.log('✅ WebChat initialisé avec succès');
+        
+    } catch (error) {
+        console.error('❌ Erreur initialisation WebChat:', error);
+        
+        const container = document.getElementById('webchat-container');
+        if (container) {
+            container.innerHTML = `
+                <div style="padding:20px;text-align:center;color:red;">
+                    <h3>❌ Erreur de connexion</h3>
+                    <p>Impossible de se connecter au chatbot.</p>
+                    <p><small>${error.message}</small></p>
+                    <button onclick="this.parentElement.innerHTML=''">Réessayer</button>
+                </div>
+            `;
+        }
     }
-    return next(action);
-  });
-
-  renderWebChat({
-    directLine: createDirectLine({ token }),
-    store,
-    userID: 'user-' + Math.random().toString(36).substr(2, 9)
-  }, document.getElementById('webchat-container'));
 }
-
 
 function initializeChatModal() {
   const closeBtn = document.getElementById('webchat-close');
