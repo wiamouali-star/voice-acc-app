@@ -443,6 +443,44 @@ def debug_bot_config():
     logger.info(f"🔍 Debug bot config: {debug_info}")
     return jsonify(debug_info)
 
+
+# ============================================
+# ROUTES BOT INTÉGRÉES DANS FLASK
+# ============================================
+
+from botbuilder.core import BotFrameworkAdapter, BotFrameworkAdapterSettings
+from botbuilder.schema import Activity
+import asyncio
+
+# Configuration du bot
+bot_settings = BotFrameworkAdapterSettings("", "")  # Sans auth pour le moment
+bot_adapter = BotFrameworkAdapter(bot_settings)
+
+@app.route("/api/messages", methods=["POST"])
+def messages():
+    """Endpoint principal pour le bot"""
+    try:
+        body = request.json
+        activity = Activity().deserialize(body)
+        
+        async def process_activity():
+            await bot_adapter.process_activity(activity, "", bot_logic)
+        
+        asyncio.run(process_activity())
+        return jsonify({"status": "processed"}), 200
+        
+    except Exception as e:
+        logger.error(f"Erreur bot: {e}")
+        return jsonify({"error": str(e)}), 500
+
+async def bot_logic(context):
+    """Logique de votre bot"""
+    if context.activity.type == "message":
+        await context.send_activity(f"Bot dit: Vous avez dit '{context.activity.text}'")
+    elif context.activity.type == "event" and context.activity.name == "newsSelected":
+        news = context.activity.value
+        await context.send_activity(f"📰 Article sélectionné: {news['title']}")
+
 # ============================================
 # CLASSIFICATION AVEC VALIDATION
 # ============================================
