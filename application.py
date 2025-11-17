@@ -456,21 +456,28 @@ import asyncio
 bot_settings = BotFrameworkAdapterSettings("", "")  # Sans auth pour le moment
 bot_adapter = BotFrameworkAdapter(bot_settings)
 
-@app.route("/api/messages", methods=["POST"])
+@app.route("/api/messages", methods=["POST", "OPTIONS"])
 def messages():
-    """Endpoint principal pour le bot"""
+    """Version ultra-simplifiée pour tester"""
     try:
-        body = request.json
-        activity = Activity().deserialize(body)
+        if request.method == "OPTIONS":
+            return jsonify({"status": "ok"}), 200
+            
+        body = request.get_json()
+        logger.info(f"Message reçu: {body}")
         
-        async def process_activity():
-            await bot_adapter.process_activity(activity, "", bot_logic)
+        # Réponse simple immédiate
+        response = {
+            "type": "message",
+            "text": "✅ Bonjour ! Je suis votre bot Flask qui fonctionne !",
+            "from": {"id": "bot", "name": "Flask Bot"},
+            "recipient": {"id": "user"}
+        }
         
-        asyncio.run(process_activity())
-        return jsonify({"status": "processed"}), 200
+        return jsonify(response), 200
         
     except Exception as e:
-        logger.error(f"Erreur bot: {e}")
+        logger.error(f"Erreur: {e}")
         return jsonify({"error": str(e)}), 500
 
 async def bot_logic(context):
