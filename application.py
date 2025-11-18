@@ -444,13 +444,40 @@ def debug_bot_config():
     return jsonify(debug_info)
 
 
+# ============================================
+# CONFIGURATION AZURE OPENAI (POUR LE CHAT UNIQUEMENT)
+# ============================================
+
+# Configuration Azure OpenAI pour le chat
+try:
+    from openai import AzureOpenAI
+    
+    # Configuration Azure OpenAI
+    azure_openai_key = os.getenv("AZURE_OPENAI_API_KEY")
+    azure_openai_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+    
+    if all([azure_openai_key, azure_openai_endpoint]):
+        azure_openai_client = AzureOpenAI(
+            api_key=azure_openai_key,
+            azure_endpoint=azure_openai_endpoint
+        )
+        logger.info("✅ Azure OpenAI client initialized successfully for chat")
+    else:
+        azure_openai_client = None
+        logger.warning("⚠️ Azure OpenAI configuration missing, chat will use Mistral")
+        
+except ImportError:
+    logger.warning("❌ OpenAI package not installed, Azure OpenAI chat features disabled")
+    azure_openai_client = None
+except Exception as e:
+    logger.error(f"❌ Failed to initialize Azure OpenAI client: {e}")
+    azure_openai_client = None
+
 
 @app.route("/api/chat", methods=["POST"])
 def chat_on_article():
     """
-    Endpoint de chat simple :
-    - reçoit: { "message": "...", "article": { title, summary, url } }
-    - renvoie: { "reply": "..." }
+    Endpoint de chat simple avec Azure OpenAI
     """
     try:
         data = request.get_json(force=True) or {}
@@ -464,58 +491,110 @@ def chat_on_article():
         summary = article.get("summary", "")
         url = article.get("url", article.get("link", ""))
 
-        # Si Mistral est dispo → on l'utilise
-        if mistral:
-            prompt_system = (
-                "Tu es un assistant qui discute d'actualités en français. "
-                "Tu expliques clairement le contexte, les enjeux, avec un ton pédagogique. "
-                "Tu t'appuies uniquement sur les informations disponibles dans le titre et le résumé. "
-                "Si une information n'apparaît pas dans l'article, tu le dis clairement."
-            )
+        # PRIORITÉ : Azure OpenAI pour le chat
+        if azure_openai_client:
+            try:
+                logger.info("🤖 Using Azure OpenAI for chat response")
+                
+                prompt_system = (
+                    "Tu es un assistant qui discute d'actualités en français. "
+                    "Tu expliques clairement le contexte, les enjeux, avec un ton pédagogique. "
+                    "Tu t'appuies uniquement sur les informations disponibles dans le titre et le résumé. "
+                    "Si une information n'apparaît pas dans l'article, tu le dis clairement. "
+                    "Sois concis et utile (3-5 phrases maximum)."
+                )
 
-            article_context = (
-                f"Titre : {title}\n"
-                f"Résumé : {summary}\n"
-                f"URL : {url}\n"
-            )
+                article_context = (
+                    f"Titre : {title}\n"
+                    f"Résumé : {summary}\n"
+                )
 
-            chat_response = mistral.chat(
-                model="mistral-small",
-                messages=[
-                    {"role": "system", "content": prompt_system},
-                    {"role": "user", "content": (
-                        "Voici l'article dont nous parlons :\n"
-                        + article_context +
-                        "\nQuestion de l'utilisateur : " + user_message
-                    )}
-                ],
-                temperature=0.3,
-                max_tokens=400
-            )
-
-            if getattr(chat_response, "choices", None):
-                reply_text = chat_response.choices[0].message.content
-            else:
-                reply_text = "Je n'ai pas pu générer de réponse, peux-tu reformuler ta question ?"
-
+                # Appel Azure OpenAI
+                response = azure_openai_client.chat.completions.create(
+                    model=azure_openai_deployment,
+                    messages=[
+                        {"role": "system", "content": prompt_system},
+                        {"role": "user", "content": (
+                            "À propos de cet article :\n" +
+                            article_context +
+                            f"\nQuestion de l'utilisateur : {user_message}\n" +
+                            "Réponds en français de manière utile :"
+                        )}
+                    ],
+                    temperature=0.3,
+                    max_tokens=300
+                )
+                
+                reply_text = response.choices[0].message.content
+                logger.info("✅ Azure OpenAI response generated successfully")
+                
+            except Exception as e:
+                logger.error(f"❌ Azure OpenAI chat error: {e}")
+                # Fallback sur Mistral
+                reply_text = generate_response_with_mistral(title, summary, url, user_message)
+        
+        # FALLBACK : Mistral AI
+        elif mistral:
+            logger.info("🔄 Azure OpenAI not available, using Mistral fallback")
+            reply_text = generate_response_with_mistral(title, summary, url, user_message)
+        
+        # FALLBACK ULTIME : Réponse simple
         else:
-            # Fallback si Mistral n'est pas configuré
+            logger.warning("⚠️ No AI service available, using basic fallback")
             reply_text = (
-                f"Nous parlons de l'article : {title}.\n"
+                f"À propos de l'article : {title}\n\n"
                 f"Résumé : {summary}\n\n"
-                "Mistral n'est pas disponible pour l'instant, "
-                "mais tu peux toujours lire l'article via le lien fourni."
+                f"Votre question : {user_message}\n\n"
+                "⚠️ Service d'IA temporairement indisponible. "
+                "Vous pouvez lire l'article via le lien fourni."
             )
 
         return jsonify({
             "reply": reply_text,
-            "articleTitle": title
+            "articleTitle": title,
+            "aiProvider": "azure_openai" if azure_openai_client else "mistral" if mistral else "none"
         })
 
     except Exception as e:
-        logger.exception("Erreur dans /api/chat")
+        logger.exception("❌ Erreur dans /api/chat")
         return jsonify({"error": "internal_error", "message": str(e)}), 500
 
+def generate_response_with_mistral(title, summary, url, user_message):
+    """Génère une réponse avec Mistral (fallback)"""
+    try:
+        prompt_system = (
+            "Tu es un assistant qui discute d'actualités en français. "
+            "Réponds de manière concise et utile."
+        )
+
+        article_context = (
+            f"Titre : {title}\n"
+            f"Résumé : {summary}\n"
+        )
+
+        chat_response = mistral.chat(
+            model="mistral-small",
+            messages=[
+                {"role": "system", "content": prompt_system},
+                {"role": "user", "content": (
+                    "À propos de cet article :\n" +
+                    article_context +
+                    f"\nQuestion : {user_message}\n" +
+                    "Réponds brièvement :"
+                )}
+            ],
+            temperature=0.3,
+            max_tokens=300
+        )
+
+        if hasattr(chat_response, 'choices') and chat_response.choices:
+            return chat_response.choices[0].message.content
+        else:
+            return "Je n'ai pas pu générer de réponse avec les informations disponibles."
+            
+    except Exception as e:
+        logger.error(f"❌ Mistral fallback also failed: {e}")
+        return "Désolé, je ne peux pas répondre pour le moment en raison d'un problème technique."
 
 
 # ============================================
