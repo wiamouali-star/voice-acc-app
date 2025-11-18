@@ -501,20 +501,23 @@ def chat_on_article():
                 )
                 
                 # ✅ EXTRACTION ROBUSTE : Gérer tous les cas d'erreur
+
                 try:
-                    # Essayer l'extraction normale
+                    # Normal extraction if available
                     if hasattr(chat_response, 'choices') and chat_response.choices:
                         choice = chat_response.choices[0]
                         if hasattr(choice, 'message') and hasattr(choice.message, 'content'):
                             reply_text = choice.message.content
+                        elif hasattr(choice, 'content'):
+                            reply_text = choice.content
                         else:
-                            # Fallback : utiliser la représentation string
                             reply_text = str(chat_response)
+                    elif hasattr(chat_response, 'content'):
+                        reply_text = chat_response.content
                     else:
                         reply_text = str(chat_response)
-                        
-                except Exception as extract_error:
-                    logger.warning(f"Extraction normale échouée, utilisation fallback: {extract_error}")
+                except Exception as e:
+                    logger.warning(f"Failed to extract Mistral response: {e}")
                     reply_text = str(chat_response)
                 
                 # Nettoyer la réponse si c'est un dict
@@ -578,9 +581,21 @@ def generate_response_with_mistral(title, summary, url, user_message):
             max_tokens=300
         )
 
-        if hasattr(chat_response, 'choices') and chat_response.choices:
-            return chat_response.choices[0].message.content
-        else:
+        try:
+            if hasattr(chat_response, 'choices') and chat_response.choices:
+                choice = chat_response.choices[0]
+                if hasattr(choice, 'message') and hasattr(choice.message, 'content'):
+                    return choice.message.content
+                elif hasattr(choice, 'content'):
+                    return choice.content
+                else:
+                    return str(chat_response)
+            elif hasattr(chat_response, 'content'):
+                return chat_response.content
+            else:
+                return str(chat_response)
+        except Exception as e:
+            logger.error(f"Failed to extract Mistral response: {e}")
             return "Je n'ai pas pu générer de réponse avec les informations disponibles."
             
     except Exception as e:
