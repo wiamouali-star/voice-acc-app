@@ -444,54 +444,10 @@ def debug_bot_config():
     return jsonify(debug_info)
 
 
-# ============================================
-# CONFIGURATION AZURE OPENAI (POUR LE CHAT UNIQUEMENT)
-# ============================================
-
-# ============================================
-# CONFIGURATION AZURE OPENAI (POUR LE CHAT UNIQUEMENT)
-# ============================================
-
-# Configuration Azure OpenAI pour le chat
-try:
-    from openai import AzureOpenAI
-    
-    # Configuration Azure OpenAI - Variables REQUISES
-    azure_openai_key = os.getenv("AZURE_OPENAI_API_KEY")
-    azure_openai_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-    
-    # Variables OPTIONNELLES avec valeurs par défaut
-    azure_openai_api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
-    azure_openai_deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4")  # ✅ CORRIGÉ
-    
-    if all([azure_openai_key, azure_openai_endpoint]):
-        azure_openai_client = AzureOpenAI(
-            api_key=azure_openai_key,
-            api_version=azure_openai_api_version,  # ✅ AJOUTÉ
-            azure_endpoint=azure_openai_endpoint
-        )
-        logger.info("✅ Azure OpenAI client initialized successfully for chat")
-        logger.info(f"📝 Using deployment: {azure_openai_deployment_name}")
-    else:
-        azure_openai_client = None
-        missing_vars = []
-        if not azure_openai_key: missing_vars.append("AZURE_OPENAI_API_KEY")
-        if not azure_openai_endpoint: missing_vars.append("AZURE_OPENAI_ENDPOINT")
-        logger.warning(f"⚠️ Azure OpenAI configuration missing: {missing_vars}")
-        
-except ImportError:
-    logger.warning("❌ OpenAI package not installed, Azure OpenAI chat features disabled")
-    azure_openai_client = None
-except Exception as e:
-    logger.error(f"❌ Failed to initialize Azure OpenAI client: {e}")
-    azure_openai_client = None
-    
-
-
 @app.route("/api/chat", methods=["POST"])
 def chat_on_article():
     """
-    Endpoint de chat simple avec Azure OpenAI
+    Endpoint de chat simple avec Mistral AI - VERSION CORRIGÉE
     """
     try:
         data = request.get_json(force=True) or {}
@@ -505,11 +461,11 @@ def chat_on_article():
         summary = article.get("summary", "")
         url = article.get("url", article.get("link", ""))
 
-        # PRIORITÉ : Azure OpenAI pour le chat
-        if azure_openai_client:
+        # UTILISER MISTRAL DIRECTEMENT
+        if mistral:
+            logger.info("🤖 Using Mistral AI for chat response")
+            
             try:
-                logger.info("🤖 Using Azure OpenAI for chat response")
-                
                 prompt_system = (
                     "Tu es un assistant qui discute d'actualités en français. "
                     "Tu expliques clairement le contexte, les enjeux, avec un ton pédagogique. "
@@ -523,9 +479,8 @@ def chat_on_article():
                     f"Résumé : {summary}\n"
                 )
 
-                # ✅ CORRECTION : Utilisation de la variable définie
-                response = azure_openai_client.chat.completions.create(
-                    model=azure_openai_deployment_name,  # ✅ CORRIGÉ
+                chat_response = mistral.chat(
+                    model="mistral-small",
                     messages=[
                         {"role": "system", "content": prompt_system},
                         {"role": "user", "content": (
@@ -539,22 +494,32 @@ def chat_on_article():
                     max_tokens=300
                 )
                 
-                reply_text = response.choices[0].message.content
-                logger.info("✅ Azure OpenAI response generated successfully")
-                
+                # ✅ CORRECTION : Gestion robuste de la réponse Mistral
+                if hasattr(chat_response, 'choices') and chat_response.choices:
+                    # Méthode compatible avec toutes les versions
+                    try:
+                        reply_text = chat_response.choices[0].message.content
+                    except AttributeError:
+                        # Fallback si la structure est différente
+                        reply_text = str(chat_response.choices[0].message)
+                    logger.info("✅ Mistral AI response generated successfully")
+                else:
+                    reply_text = "Je n'ai pas pu générer de réponse avec les informations disponibles."
+                    
             except Exception as e:
-                logger.error(f"❌ Azure OpenAI chat error: {e}")
-                # Fallback sur Mistral
-                reply_text = generate_response_with_mistral(title, summary, url, user_message)
+                logger.error(f"❌ Mistral AI chat error: {e}")
+                # Réponse de fallback en cas d'erreur Mistral
+                reply_text = (
+                    f"À propos de l'article : {title}\n\n"
+                    f"Résumé : {summary}\n\n"
+                    f"Votre question : {user_message}\n\n"
+                    "Je rencontre des difficultés techniques pour analyser cet article. "
+                    "Vous pouvez le lire directement via le lien fourni."
+                )
         
-        # FALLBACK : Mistral AI
-        elif mistral:
-            logger.info("🔄 Azure OpenAI not available, using Mistral fallback")
-            reply_text = generate_response_with_mistral(title, summary, url, user_message)
-        
-        # FALLBACK ULTIME : Réponse simple
+        # FALLBACK : Réponse simple
         else:
-            logger.warning("⚠️ No AI service available, using basic fallback")
+            logger.warning("⚠️ Mistral AI not available, using basic fallback")
             reply_text = (
                 f"À propos de l'article : {title}\n\n"
                 f"Résumé : {summary}\n\n"
@@ -566,47 +531,14 @@ def chat_on_article():
         return jsonify({
             "reply": reply_text,
             "articleTitle": title,
-            "aiProvider": "azure_openai" if azure_openai_client else "mistral" if mistral else "none"
+            "aiProvider": "mistral" if mistral else "none"
         })
 
     except Exception as e:
         logger.exception("❌ Erreur dans /api/chat")
         return jsonify({"error": "internal_error", "message": str(e)}), 500
 
-@app.route('/api/debug-azure-openai')
-def debug_azure_openai():
-    """Route de débogage pour Azure OpenAI"""
-    debug_info = {
-        'azure_openai_configured': azure_openai_client is not None,
-        'required_variables': {
-            'AZURE_OPENAI_API_KEY': bool(os.getenv("AZURE_OPENAI_API_KEY")),
-            'AZURE_OPENAI_ENDPOINT': bool(os.getenv("AZURE_OPENAI_ENDPOINT"))
-        },
-        'optional_variables': {
-            'AZURE_OPENAI_API_VERSION': os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01 (default)"),
-            'AZURE_OPENAI_DEPLOYMENT_NAME': os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4 (default)")
-        },
-        'used_config': {
-            'api_version': azure_openai_api_version,
-            'deployment_name': azure_openai_deployment_name
-        }
-    }
-    
-    # Test de connexion si configuré
-    if azure_openai_client:
-        try:
-            test_response = azure_openai_client.chat.completions.create(
-                model=azure_openai_deployment_name,
-                messages=[{"role": "user", "content": "Test de connexion - réponds par 'OK'"}],
-                max_tokens=5
-            )
-            debug_info['connection_test'] = 'success'
-            debug_info['test_response'] = test_response.choices[0].message.content
-        except Exception as e:
-            debug_info['connection_test'] = 'failed'
-            debug_info['error'] = str(e)
-    
-    return jsonify(debug_info)
+
     
 
 def generate_response_with_mistral(title, summary, url, user_message):
