@@ -11,6 +11,12 @@ const elements = {
     loading: document.getElementById('loading')
 };
 
+// État de l'application
+let isListening = false;
+let recognition = null;
+let currentChatArticle = null;
+let chatModal = null;
+
 // Vérification des éléments DOM
 function initializeDOMElements() {
     console.log('🔍 Initialisation des éléments DOM...');
@@ -41,24 +47,6 @@ function initializeDOMElements() {
         status: !!elements.status,
         loading: !!elements.loading
     });
-}
-
-// Fonction de débogage améliorée
-function debugAPIResponse(articles, topic) {
-    console.log('=== DÉBOGAGE API ===');
-    console.log('Topic recherché:', topic);
-    console.log('Nombre d\'articles:', articles?.length || 0);
-    console.log('Type des données:', typeof articles);
-    
-    if (articles && articles.length > 0) {
-        console.log('Premier article:', articles[0]);
-    }
-    
-    const debugInfo = document.getElementById('debug-info');
-    if (debugInfo) {
-        debugInfo.textContent = `Articles: ${articles?.length || 0}\nTitres:\n` + 
-            (articles ? articles.map((a, i) => `${i+1}. ${a?.title || 'Sans titre'}`).join('\n') : 'Aucun article');
-    }
 }
 
 // Gestion du chargement
@@ -93,15 +81,6 @@ function formatDate(dateString) {
         return 'Date inconnue';
     }
 }
-
-// État de l'application
-let isListening = false;
-let recognition = null;
-
-// État du chat
-let currentChatArticle = null;
-let conversationId = null;
-let isWaitingForResponse = false;
 
 // Classification
 async function classifyQuery(query) {
@@ -252,12 +231,7 @@ async function handleSearch() {
     }
 }
 
-// FONCTION PRINCIPALE CORRIGÉE - loadNews
-/**
- * 
- * @param {string} topic 
- * @param {boolean} isSearch 
- */
+// FONCTION PRINCIPALE - loadNews
 async function loadNews(topic = '', isSearch = false) {
     console.log('📰 Chargement des actualités, topic:', topic, 'isSearch:', isSearch);
     
@@ -316,7 +290,6 @@ async function loadNews(topic = '', isSearch = false) {
     }
 }
 
-
 // FONCTION D'AFFICHAGE DES ARTICLES
 function displayArticles(articles, topic) {
     console.log('🖼️ Affichage des articles:', articles);
@@ -341,12 +314,9 @@ function displayArticles(articles, topic) {
                          article.pubDate ? formatDate(article.pubDate) : 
                          article.date ? formatDate(article.date) : '';
         
-        // Créer un ID unique pour cet article
-        const articleId = `article_${index}_${Date.now()}`;
-        
         // Utiliser le format CARTE avec bouton de chat
         return `
-            <div class="article-card fade-in" data-article-id="${articleId}">
+            <div class="article-card fade-in">
                 <div class="article-image">
                     ${getArticleIcon(source)}
                 </div>
@@ -367,11 +337,7 @@ function displayArticles(articles, topic) {
                     <div class="article-actions">
                         <button
                             class="chat-btn"
-                            data-article-id="${articleId}"
-                            data-article-title="${encodeURIComponent(title)}"
-                            data-article-url="${encodeURIComponent(link)}"
-                            data-article-summary="${encodeURIComponent(summary)}"
-                            onclick="openChatForArticle(this)">
+                            onclick="openChatForArticle(${JSON.stringify(article).replace(/"/g, '&quot;')})">
                             💬 Discuter avec le bot
                         </button>
                     </div>
@@ -393,7 +359,6 @@ function displayArticles(articles, topic) {
         displayError('Erreur d\'affichage - conteneur non trouvé');
     }
 }
-
 
 // Fonction pour obtenir une icône basée sur la source
 function getArticleIcon(source) {
@@ -513,48 +478,7 @@ function initializeViewButtons() {
     });
 }
 
-// Mise à jour du compteur de résultats
-function updateResultsCount(count) {
-    const resultsCount = document.getElementById('results-count');
-    if (resultsCount) {
-        resultsCount.textContent = `${count} article${count > 1 ? 's' : ''} trouvé${count > 1 ? 's' : ''}`;
-    }
-}
-
-// Initialisation globale
-async function initializeApp() {
-    console.log('🚀 Initialisation de l\'application...');
-    
-    // Initialisation DOM
-    initializeDOMElements();
-    
-    // Initialisation reconnaissance vocale
-    initializeVoiceRecognition();
-    
-    // Initialisation recherche
-    initializeSearchHandlers();
-    
-    // Initialisation des catégories
-    initializeCategoryButtons();
-    
-    // Initialisation des vues
-    initializeViewButtons();
-
-    initializeChatModal(); 
-    
-    // Chargement initial
-    try {
-        await loadNews();
-        console.log('🎉 Application initialisée avec succès!');
-    } catch (error) {
-        console.error('❌ Erreur initialisation:', error);
-        displayError('Erreur lors du chargement initial');
-    }
-}
-
-// Démarrage
-document.addEventListener('DOMContentLoaded', initializeApp);
-
+// Fonctionnalités améliorées
 function initializeEnhancedFeatures() {
     console.log('🎨 Initialisation des fonctionnalités améliorées...');
     
@@ -636,7 +560,237 @@ function updateFooterTime() {
     }
 }
 
-// Ajoutez cet appel dans votre fonction initializeApp
+// ============================================
+// SYSTÈME DE CHAT SIMPLIFIÉ
+// ============================================
+
+// Fonction pour ouvrir le chat
+async function openChatForArticle(article) {
+    console.log('💬 Ouverture du chat simplifié');
+
+    try {
+        currentChatArticle = article;
+        console.log('📰 Article sélectionné:', currentChatArticle);
+
+        // Créer ou réutiliser le modal de chat
+        if (!chatModal) {
+            createChatModal();
+        }
+        
+        // Afficher le modal et l'overlay
+        chatModal.style.display = 'flex';
+        const overlay = document.getElementById('chat-overlay');
+        if (overlay) {
+            overlay.style.display = 'block';
+        }
+        
+        // Initialiser le chat avec un message de bienvenue
+        const messagesContainer = document.getElementById('chat-messages');
+        messagesContainer.innerHTML = `
+            <div class="message bot-message">
+                <strong>🤖 Assistant:</strong> Je peux répondre à vos questions sur cet article : "<em>${article.title}</em>"
+            </div>
+        `;
+
+    } catch (error) {
+        console.error('❌ Erreur ouverture chat:', error);
+        alert('Erreur lors de l\'ouverture du chat');
+    }
+}
+
+// Créer le modal de chat
+function createChatModal() {
+    chatModal = document.createElement('div');
+    chatModal.id = 'chat-modal';
+    chatModal.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 90%;
+        max-width: 500px;
+        height: 70vh;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 5px 25px rgba(0,0,0,0.3);
+        z-index: 1000;
+        display: none;
+        flex-direction: column;
+    `;
+    
+    chatModal.innerHTML = `
+        <div style="padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa; border-radius: 10px 10px 0 0;">
+            <h3 style="margin: 0; font-size: 16px;">💬 Discussion sur l'article</h3>
+            <button id="chat-close" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #666;">×</button>
+        </div>
+        
+        <div id="chat-messages" style="flex: 1; overflow-y: auto; padding: 15px; background: #fafafa;">
+            <!-- Messages apparaîtront ici -->
+        </div>
+        
+        <div style="padding: 15px; border-top: 1px solid #eee; background: white; border-radius: 0 0 10px 10px;">
+            <div style="display: flex; gap: 10px;">
+                <input 
+                    type="text" 
+                    id="chat-input" 
+                    placeholder="Posez une question sur cet article..." 
+                    style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;"
+                >
+                <button 
+                    id="chat-send" 
+                    style="padding: 10px 15px; background: #0078d4; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;"
+                >
+                    Envoyer
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(chatModal);
+    
+    // Créer l'overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'chat-overlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 999;
+        display: none;
+    `;
+    document.body.appendChild(overlay);
+    
+    // Gestionnaires d'événements
+    document.getElementById('chat-close').addEventListener('click', closeChat);
+    document.getElementById('chat-send').addEventListener('click', sendChatMessage);
+    overlay.addEventListener('click', closeChat);
+    
+    // Entrée clavier
+    document.getElementById('chat-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            sendChatMessage();
+        }
+    });
+}
+
+// Fermer le chat
+function closeChat() {
+    if (chatModal) {
+        chatModal.style.display = 'none';
+    }
+    const overlay = document.getElementById('chat-overlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
+    currentChatArticle = null;
+}
+
+// Envoyer un message
+async function sendChatMessage() {
+    if (!currentChatArticle) {
+        console.error('❌ Aucun article sélectionné');
+        return;
+    }
+    
+    const input = document.getElementById('chat-input');
+    const message = input.value.trim();
+    
+    if (!message) {
+        return;
+    }
+    
+    // Ajouter le message de l'utilisateur
+    addMessageToChat('user', message);
+    input.value = '';
+    input.disabled = true;
+    
+    try {
+        console.log('📤 Envoi message au backend Flask...');
+        
+        // APPEL DIRECT au backend Flask
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: message,
+                article: {
+                    title: currentChatArticle.title,
+                    summary: currentChatArticle.summary,
+                    url: currentChatArticle.link || currentChatArticle.url
+                }
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Erreur HTTP: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('✅ Réponse reçue:', data);
+        
+        if (data.reply) {
+            addMessageToChat('bot', data.reply);
+        } else if (data.error) {
+            addMessageToChat('bot', `❌ Erreur: ${data.message || data.error}`);
+        } else {
+            addMessageToChat('bot', '❌ Réponse inattendue du serveur');
+        }
+        
+    } catch (error) {
+        console.error('❌ Erreur envoi message:', error);
+        addMessageToChat('bot', '❌ Erreur de connexion au serveur');
+    } finally {
+        input.disabled = false;
+        input.focus();
+    }
+}
+
+// Ajouter un message au chat
+function addMessageToChat(sender, text) {
+    const container = document.getElementById('chat-messages');
+    if (!container) return;
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${sender}-message`;
+    messageDiv.style.cssText = `
+        margin: 10px 0;
+        padding: 10px 15px;
+        border-radius: 15px;
+        max-width: 80%;
+        line-height: 1.4;
+        animation: fadeIn 0.3s ease-in;
+        ${sender === 'user' 
+            ? 'background: #0078d4; color: white; margin-left: auto; text-align: right;' 
+            : 'background: #f0f0f0; color: #333; margin-right: auto; border: 1px solid #e1e5e9;'
+        }
+    `;
+    
+    messageDiv.innerHTML = `
+        <strong>${sender === 'user' ? '👤 Vous' : '🤖 Assistant'}:</strong><br>
+        ${text.replace(/\n/g, '<br>')}
+    `;
+    
+    container.appendChild(messageDiv);
+    container.scrollTop = container.scrollHeight;
+}
+
+// Initialisation du modal de chat
+function initializeChatModal() {
+    // S'assurer que le modal est créé au chargement
+    if (!chatModal) {
+        createChatModal();
+    }
+}
+
+// ============================================
+// INITIALISATION PRINCIPALE
+// ============================================
+
 async function initializeApp() {
     console.log('🚀 Initialisation de l\'application...');
     
@@ -649,8 +803,17 @@ async function initializeApp() {
     // Initialisation recherche
     initializeSearchHandlers();
     
+    // Initialisation des catégories
+    initializeCategoryButtons();
+    
+    // Initialisation des vues
+    initializeViewButtons();
+
     // Initialisation fonctionnalités améliorées
     initializeEnhancedFeatures();
+    
+    // Initialisation du chat
+    initializeChatModal();
     
     // Chargement initial
     try {
@@ -662,169 +825,11 @@ async function initializeApp() {
     }
 }
 
+// Démarrage de l'application
+document.addEventListener('DOMContentLoaded', initializeApp);
 
-async function openChatForArticle(buttonEl) {
-    console.log('💬 Ouverture du chat pour l\'article via data-*');
-
-    try {
-        const card = buttonEl.closest('.article-card');
-        const id = card?.dataset.articleId || 'article_' + Date.now();
-
-        const title = decodeURIComponent(buttonEl.dataset.articleTitle || '');
-        const url = decodeURIComponent(buttonEl.dataset.articleUrl || '');
-        const summary = decodeURIComponent(buttonEl.dataset.articleSummary || '');
-
-        console.log('📰 Article sélectionné:', { id, title, url, summary });
-
-        // Afficher le modal
-        const modal = document.getElementById('webchat-modal');
-        const container = document.getElementById('webchat-container');
-
-        if (!modal || !container) {
-            console.error('❌ Éléments WebChat non trouvés');
-            return;
-        }
-
-        modal.style.display = 'block';
-        container.innerHTML = '<div style="padding:20px;text-align:center;">Chargement du chatbot...</div>';
-
-        // Récupérer le token depuis le backend Flask
-        const response = await fetch('/api/bot-token');
-        if (!response.ok) {
-            throw new Error(`Erreur HTTP: ${response.status}`);
-        }
-        const data = await response.json();
-        if (!data.token) {
-            throw new Error('Token non reçu du serveur');
-        }
-
-        console.log('✅ Token Direct Line reçu');
-
-        const { createDirectLine, createStore, renderWebChat } = window.WebChat;
-
-        const selectedNews = {
-            id,
-            title,
-            url,
-            summary,
-            timestamp: new Date().toISOString()
-        };
-
-        const store = createStore({}, ({ dispatch }) => next => action => {
-            if (action.type === 'DIRECT_LINE/CONNECT_FULFILLED') {
-                console.log('🚀 Connexion Direct Line établie, envoi de l\'événement newsSelected...');
-
-                dispatch({
-                    type: 'WEB_CHAT/SEND_EVENT',
-                    payload: {
-                        name: 'newsSelected',
-                        value: selectedNews
-                    }
-                });
-            }
-            return next(action);
-        });
-
-        const styleOptions = {
-            bubbleBackground: 'rgba(0, 120, 215, 0.1)',
-            bubbleFromUserBackground: 'rgba(0, 120, 215, 0.2)',
-            hideUploadButton: true,
-            sendBoxBackground: '#f0f0f0'
-        };
-
-        renderWebChat({
-            directLine: createDirectLine({ token: data.token }),
-            store,
-            styleOptions,
-            userID: 'user-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-            username: 'Utilisateur Actualités',
-            locale: 'fr-FR'
-        }, container);
-
-        console.log('✅ WebChat initialisé avec succès');
-
-    } catch (error) {
-        console.error('❌ Erreur initialisation WebChat:', error);
-        const container = document.getElementById('webchat-container');
-        if (container) {
-            container.innerHTML = `
-                <div style="padding:20px;text-align:center;color:red;">
-                    <h3>❌ Erreur de connexion</h3>
-                    <p>Impossible de se connecter au chatbot.</p>
-                    <p><small>${error.message}</small></p>
-                </div>
-            `;
-        }
-    }
-}
-
-
-function initializeChatModal() {
-  const closeBtn = document.getElementById('webchat-close');
-  const modal = document.getElementById('webchat-modal');
-
-  if (closeBtn && modal) {
-    closeBtn.addEventListener('click', () => {
-      modal.style.display = 'none';
-      // Optionnel : vider le contenu pour repartir propre
-      const container = document.getElementById('webchat-container');
-      if (container) container.innerHTML = '';
-    });
-  }
-}
-
-let selectedArticle = null;
-
-function onClickDiscuss(article) {
-    selectedArticle = article; // { title, summary, link... }
-    openChatPanel(article);
-}
-
-async function sendChatMessage() {
-    const input = document.getElementById("chat-input");
-    const text = input.value.trim();
-    if (!text || !selectedArticle) return;
-
-    // Afficher le message de l'utilisateur dans le chat
-    addMessageToChat("user", text);
-    input.value = "";
-
-    try {
-        const res = await fetch("/api/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                message: text,
-                article: {
-                    title: selectedArticle.title,
-                    summary: selectedArticle.summary,
-                    url: selectedArticle.link
-                }
-            })
-        });
-
-        const data = await res.json();
-
-        if (data.reply) {
-            addMessageToChat("bot", data.reply);
-        } else if (data.error) {
-            addMessageToChat("bot", "Erreur : " + (data.message || data.error));
-        }
-
-    } catch (err) {
-        console.error(err);
-        addMessageToChat("bot", "Erreur de connexion au serveur.");
-    }
-}
-
-function addMessageToChat(sender, text) {
-    const container = document.getElementById("chat-messages");
-    const div = document.createElement("div");
-    div.className = sender === "user" ? "msg user" : "msg bot";
-    div.innerText = text;
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
-}
-
-
-
+// Export des fonctions globales pour l'HTML
+window.openChatForArticle = openChatForArticle;
+window.loadNews = loadNews;
+window.closeChat = closeChat;
+window.sendChatMessage = sendChatMessage;
