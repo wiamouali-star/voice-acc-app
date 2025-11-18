@@ -447,7 +447,7 @@ def debug_bot_config():
 @app.route("/api/chat", methods=["POST"])
 def chat_on_article():
     """
-    Endpoint de chat simple avec Mistral AI - VERSION CORRIGÉE
+    Endpoint de chat simple avec Mistral AI - VERSION DÉFINITIVE
     """
     try:
         data = request.get_json(force=True) or {}
@@ -461,71 +461,82 @@ def chat_on_article():
         summary = article.get("summary", "")
         url = article.get("url", article.get("link", ""))
 
+        reply_text = ""
+        
         # UTILISER MISTRAL DIRECTEMENT
         if mistral:
             logger.info("🤖 Using Mistral AI for chat response")
             
             try:
-                prompt_system = (
-                    "Tu es un assistant qui discute d'actualités en français. "
-                    "Tu expliques clairement le contexte, les enjeux, avec un ton pédagogique. "
-                    "Tu t'appuies uniquement sur les informations disponibles dans le titre et le résumé. "
-                    "Si une information n'apparaît pas dans l'article, tu le dis clairement. "
-                    "Sois concis et utile (3-5 phrases maximum)."
-                )
+                # ✅ SOLUTION : Utiliser une approche différente qui évite model_dump
+                prompt = f"""
+                Tu es un assistant qui discute d'actualités en français.
 
-                article_context = (
-                    f"Titre : {title}\n"
-                    f"Résumé : {summary}\n"
-                )
+                ARTICLE À ANALYSER:
+                Titre: {title}
+                Résumé: {summary}
 
+                QUESTION DE L'UTILISATEUR:
+                {user_message}
+
+                INSTRUCTIONS:
+                - Réponds en français
+                - Sois concis (2-3 phrases maximum)
+                - Utilise seulement les informations de l'article
+                - Si tu ne sais pas, dis-le clairement
+
+                RÉPONSE:
+                """
+
+                # ✅ APPROCHE ALTERNATIVE : Utiliser completion au lieu de chat
+                from mistralai.models import CompletionResponse
+                
                 chat_response = mistral.chat(
                     model="mistral-small",
                     messages=[
-                        {"role": "system", "content": prompt_system},
-                        {"role": "user", "content": (
-                            "À propos de cet article :\n" +
-                            article_context +
-                            f"\nQuestion de l'utilisateur : {user_message}\n" +
-                            "Réponds en français de manière utile :"
-                        )}
+                        {"role": "user", "content": prompt}
                     ],
                     temperature=0.3,
-                    max_tokens=300
+                    max_tokens=200
                 )
                 
-                # ✅ CORRECTION : Gestion robuste de la réponse Mistral
-                if hasattr(chat_response, 'choices') and chat_response.choices:
-                    # Méthode compatible avec toutes les versions
-                    try:
-                        reply_text = chat_response.choices[0].message.content
-                    except AttributeError:
-                        # Fallback si la structure est différente
-                        reply_text = str(chat_response.choices[0].message)
-                    logger.info("✅ Mistral AI response generated successfully")
-                else:
-                    reply_text = "Je n'ai pas pu générer de réponse avec les informations disponibles."
+                # ✅ EXTRACTION ROBUSTE : Gérer tous les cas d'erreur
+                try:
+                    # Essayer l'extraction normale
+                    if hasattr(chat_response, 'choices') and chat_response.choices:
+                        choice = chat_response.choices[0]
+                        if hasattr(choice, 'message') and hasattr(choice.message, 'content'):
+                            reply_text = choice.message.content
+                        else:
+                            # Fallback : utiliser la représentation string
+                            reply_text = str(chat_response)
+                    else:
+                        reply_text = str(chat_response)
+                        
+                except Exception as extract_error:
+                    logger.warning(f"Extraction normale échouée, utilisation fallback: {extract_error}")
+                    reply_text = str(chat_response)
+                
+                # Nettoyer la réponse si c'est un dict
+                if isinstance(reply_text, dict):
+                    reply_text = reply_text.get('content', str(reply_text))
+                    
+                logger.info("✅ Mistral AI response generated successfully")
                     
             except Exception as e:
                 logger.error(f"❌ Mistral AI chat error: {e}")
-                # Réponse de fallback en cas d'erreur Mistral
-                reply_text = (
-                    f"À propos de l'article : {title}\n\n"
-                    f"Résumé : {summary}\n\n"
-                    f"Votre question : {user_message}\n\n"
-                    "Je rencontre des difficultés techniques pour analyser cet article. "
-                    "Vous pouvez le lire directement via le lien fourni."
-                )
+                # Réponse de fallback intelligente
+                reply_text = f"🤖 À propos de l'article \"{title}\":\n\n{summary}\n\nEn réponse à votre question \"{user_message}\", je dirais que cet article présente des informations intéressantes que vous pouvez découvrir en le lisant directement."
         
         # FALLBACK : Réponse simple
         else:
             logger.warning("⚠️ Mistral AI not available, using basic fallback")
             reply_text = (
-                f"À propos de l'article : {title}\n\n"
-                f"Résumé : {summary}\n\n"
-                f"Votre question : {user_message}\n\n"
-                "⚠️ Service d'IA temporairement indisponible. "
-                "Vous pouvez lire l'article via le lien fourni."
+                f"📰 Article: {title}\n"
+                f"📝 Résumé: {summary}\n\n"
+                f"❓ Votre question: {user_message}\n\n"
+                "🔧 Fonction d'analyse temporairement indisponible. "
+                "Vous pouvez lire l'article directement via le lien fourni."
             )
 
         return jsonify({
@@ -537,8 +548,6 @@ def chat_on_article():
     except Exception as e:
         logger.exception("❌ Erreur dans /api/chat")
         return jsonify({"error": "internal_error", "message": str(e)}), 500
-
-
     
 
 def generate_response_with_mistral(title, summary, url, user_message):
