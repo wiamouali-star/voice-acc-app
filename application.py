@@ -452,8 +452,10 @@ from botbuilder.core import BotFrameworkAdapter, BotFrameworkAdapterSettings, Tu
 from botbuilder.schema import Activity
 import asyncio
 
-# Adaptateur Bot Framework
-bot_settings = BotFrameworkAdapterSettings("", "")  # Sans authentification DirectLine
+MICROSOFT_APP_ID = os.getenv("MICROSOFT_APP_ID", "")
+MICROSOFT_APP_PASSWORD = os.getenv("MICROSOFT_APP_PASSWORD", "")
+
+bot_settings = BotFrameworkAdapterSettings(MICROSOFT_APP_ID, MICROSOFT_APP_PASSWORD)
 bot_adapter = BotFrameworkAdapter(bot_settings)
 
 # Mémoire simple par conversation
