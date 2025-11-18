@@ -444,138 +444,77 @@ def debug_bot_config():
     return jsonify(debug_info)
 
 
-# ================================
-# BOT FRAMEWORK + LOGIQUE CHATBOT
-# ================================
 
-from botbuilder.core import BotFrameworkAdapter, BotFrameworkAdapterSettings, TurnContext
-from botbuilder.schema import Activity
-import asyncio
-
-MICROSOFT_APP_ID = ""
-MICROSOFT_APP_PASSWORD = ""
-
-settings = BotFrameworkAdapterSettings(app_id=None, app_password=None)
-bot_adapter = BotFrameworkAdapter(settings)
-
-# Mémoire simple par conversation
-conversation_articles = {}
-
-async def bot_logic(context: TurnContext):
-    conv_id = context.activity.conversation.id
-
-    # 1) Événement envoyé par WebChat lors du clic sur "Discuter"
-    if context.activity.type == "event" and context.activity.name == "newsSelected":
-        news = context.activity.value or {}
-
-        title = news.get("title", "Article sans titre")
-        summary = news.get("summary", "")
-        url = news.get("url", "")
-
-        # Stocker l'article pour cette conversation
-        conversation_articles[conv_id] = {
-            "title": title,
-            "summary": summary,
-            "url": url
-        }
-
-        intro = f"📰 Vous avez choisi l'article : **{title}**.\n\n"
-        if summary:
-            intro += f"Résumé : {summary}\n\n"
-        if url:
-            intro += f"Lien : {url}\n\n"
-
-        intro += "Posez-moi vos questions sur cet article (contexte, enjeux, vocabulaire, explications...)."
-
-        await context.send_activity(intro)
-        return
-
-    # 2) Message normal envoyé par l'utilisateur
-    if context.activity.type == "message":
-        user_text = context.activity.text or ""
-        article = conversation_articles.get(conv_id)
-
-        # Pas d'article → demander d'en sélectionner un
-        if not article:
-            await context.send_activity(
-                "📌 Cliquez d'abord sur un bouton « Discuter avec le bot » pour choisir un article."
-            )
-            return
-
-        # MISTRAL activé
-        if mistral:
-            try:
-                prompt_system = (
-                    "Tu es un assistant qui discute d'actualités en français.\n"
-                    "Tu expliques clairement le contexte, les enjeux, et tu restes factuel.\n"
-                    "Tu t'appuies uniquement sur les informations données (titre, résumé). "
-                    "Si une info manque, tu le dis."
-                )
-
-                article_context = (
-                    f"Titre : {article['title']}\n"
-                    f"Résumé : {article['summary']}\n"
-                    f"URL : {article['url']}\n"
-                )
-
-                chat_response = mistral.chat(
-                    model="mistral-small",
-                    messages=[
-                        {"role": "system", "content": prompt_system},
-                        {"role": "user", "content": (
-                            "Voici l'article dont nous discutons :\n"
-                            + article_context +
-                            "\nQuestion de l'utilisateur : " + user_text
-                        )}
-                    ],
-                    temperature=0.3,
-                    max_tokens=400
-                )
-
-                reply_text = (
-                    chat_response.choices[0].message.content
-                    if chat_response.choices else
-                    "Je n'ai pas pu générer une réponse, peux-tu réessayer ?"
-                )
-
-            except Exception as e:
-                logger.error(f"Erreur Mistral: {e}")
-                reply_text = "Je rencontre un problème technique avec Mistral."
-
-        # MISTRAL désactivé → fallback
-        else:
-            reply_text = (
-                f"Nous parlons de l'article : {article['title']}.\n"
-                "Tu peux me demander d'expliquer un terme, le contexte ou l'enjeu."
-            )
-
-        await context.send_activity(reply_text)
-
-
-@app.route("/api/messages", methods=["POST", "OPTIONS"])
-def messages():
-    if request.method == "OPTIONS":
-        return jsonify({"status": "ok"}), 200
-
+@app.route("/api/chat", methods=["POST"])
+def chat_on_article():
+    """
+    Endpoint de chat simple :
+    - reçoit: { "message": "...", "article": { title, summary, url } }
+    - renvoie: { "reply": "..." }
+    """
     try:
-        body = request.get_json()
-        activity = Activity().deserialize(body)
-        auth_header = ""
+        data = request.get_json(force=True) or {}
+        user_message = data.get("message", "").strip()
+        article = data.get("article", {}) or {}
 
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        if not user_message:
+            return jsonify({"error": "message_vide"}), 400
 
-        async def call_bot():
-            return await bot_adapter.process_activity(activity, auth_header, bot_logic)
+        title = article.get("title", "Article sans titre")
+        summary = article.get("summary", "")
+        url = article.get("url", article.get("link", ""))
 
-        result = loop.run_until_complete(call_bot())
-        loop.close()
+        # Si Mistral est dispo → on l'utilise
+        if mistral:
+            prompt_system = (
+                "Tu es un assistant qui discute d'actualités en français. "
+                "Tu expliques clairement le contexte, les enjeux, avec un ton pédagogique. "
+                "Tu t'appuies uniquement sur les informations disponibles dans le titre et le résumé. "
+                "Si une information n'apparaît pas dans l'article, tu le dis clairement."
+            )
 
-        return "", 200
+            article_context = (
+                f"Titre : {title}\n"
+                f"Résumé : {summary}\n"
+                f"URL : {url}\n"
+            )
+
+            chat_response = mistral.chat(
+                model="mistral-small",
+                messages=[
+                    {"role": "system", "content": prompt_system},
+                    {"role": "user", "content": (
+                        "Voici l'article dont nous parlons :\n"
+                        + article_context +
+                        "\nQuestion de l'utilisateur : " + user_message
+                    )}
+                ],
+                temperature=0.3,
+                max_tokens=400
+            )
+
+            if getattr(chat_response, "choices", None):
+                reply_text = chat_response.choices[0].message.content
+            else:
+                reply_text = "Je n'ai pas pu générer de réponse, peux-tu reformuler ta question ?"
+
+        else:
+            # Fallback si Mistral n'est pas configuré
+            reply_text = (
+                f"Nous parlons de l'article : {title}.\n"
+                f"Résumé : {summary}\n\n"
+                "Mistral n'est pas disponible pour l'instant, "
+                "mais tu peux toujours lire l'article via le lien fourni."
+            )
+
+        return jsonify({
+            "reply": reply_text,
+            "articleTitle": title
+        })
 
     except Exception as e:
-        logger.exception("Erreur /api/messages :")
-        return jsonify({"error": str(e)}), 500
+        logger.exception("Erreur dans /api/chat")
+        return jsonify({"error": "internal_error", "message": str(e)}), 500
 
 
 
