@@ -444,49 +444,137 @@ def debug_bot_config():
     return jsonify(debug_info)
 
 
-# ============================================
-# ROUTES BOT INTÉGRÉES DANS FLASK
-# ============================================
+# ================================
+# BOT FRAMEWORK + LOGIQUE CHATBOT
+# ================================
 
-from botbuilder.core import BotFrameworkAdapter, BotFrameworkAdapterSettings
+from botbuilder.core import BotFrameworkAdapter, BotFrameworkAdapterSettings, TurnContext
 from botbuilder.schema import Activity
 import asyncio
 
-# Configuration du bot
-bot_settings = BotFrameworkAdapterSettings("", "")  # Sans auth pour le moment
+# Adaptateur Bot Framework
+bot_settings = BotFrameworkAdapterSettings("", "")  # Sans authentification DirectLine
 bot_adapter = BotFrameworkAdapter(bot_settings)
+
+# Mémoire simple par conversation
+conversation_articles = {}
+
+async def bot_logic(context: TurnContext):
+    conv_id = context.activity.conversation.id
+
+    # 1) Événement envoyé par WebChat lors du clic sur "Discuter"
+    if context.activity.type == "event" and context.activity.name == "newsSelected":
+        news = context.activity.value or {}
+
+        title = news.get("title", "Article sans titre")
+        summary = news.get("summary", "")
+        url = news.get("url", "")
+
+        # Stocker l'article pour cette conversation
+        conversation_articles[conv_id] = {
+            "title": title,
+            "summary": summary,
+            "url": url
+        }
+
+        intro = f"📰 Vous avez choisi l'article : **{title}**.\n\n"
+        if summary:
+            intro += f"Résumé : {summary}\n\n"
+        if url:
+            intro += f"Lien : {url}\n\n"
+
+        intro += "Posez-moi vos questions sur cet article (contexte, enjeux, vocabulaire, explications...)."
+
+        await context.send_activity(intro)
+        return
+
+    # 2) Message normal envoyé par l'utilisateur
+    if context.activity.type == "message":
+        user_text = context.activity.text or ""
+        article = conversation_articles.get(conv_id)
+
+        # Pas d'article → demander d'en sélectionner un
+        if not article:
+            await context.send_activity(
+                "📌 Cliquez d'abord sur un bouton « Discuter avec le bot » pour choisir un article."
+            )
+            return
+
+        # MISTRAL activé
+        if mistral:
+            try:
+                prompt_system = (
+                    "Tu es un assistant qui discute d'actualités en français.\n"
+                    "Tu expliques clairement le contexte, les enjeux, et tu restes factuel.\n"
+                    "Tu t'appuies uniquement sur les informations données (titre, résumé). "
+                    "Si une info manque, tu le dis."
+                )
+
+                article_context = (
+                    f"Titre : {article['title']}\n"
+                    f"Résumé : {article['summary']}\n"
+                    f"URL : {article['url']}\n"
+                )
+
+                chat_response = mistral.chat(
+                    model="mistral-small",
+                    messages=[
+                        {"role": "system", "content": prompt_system},
+                        {"role": "user", "content": (
+                            "Voici l'article dont nous discutons :\n"
+                            + article_context +
+                            "\nQuestion de l'utilisateur : " + user_text
+                        )}
+                    ],
+                    temperature=0.3,
+                    max_tokens=400
+                )
+
+                reply_text = (
+                    chat_response.choices[0].message.content
+                    if chat_response.choices else
+                    "Je n'ai pas pu générer une réponse, peux-tu réessayer ?"
+                )
+
+            except Exception as e:
+                logger.error(f"Erreur Mistral: {e}")
+                reply_text = "Je rencontre un problème technique avec Mistral."
+
+        # MISTRAL désactivé → fallback
+        else:
+            reply_text = (
+                f"Nous parlons de l'article : {article['title']}.\n"
+                "Tu peux me demander d'expliquer un terme, le contexte ou l'enjeu."
+            )
+
+        await context.send_activity(reply_text)
+
 
 @app.route("/api/messages", methods=["POST", "OPTIONS"])
 def messages():
-    """Version ultra-simplifiée pour tester"""
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200
+
     try:
-        if request.method == "OPTIONS":
-            return jsonify({"status": "ok"}), 200
-            
         body = request.get_json()
-        logger.info(f"Message reçu: {body}")
-        
-        # Réponse simple immédiate
-        response = {
-            "type": "message",
-            "text": "✅ Bonjour ! Je suis votre bot Flask qui fonctionne !",
-            "from": {"id": "bot", "name": "Flask Bot"},
-            "recipient": {"id": "user"}
-        }
-        
-        return jsonify(response), 200
-        
+        activity = Activity().deserialize(body)
+        auth_header = request.headers.get("Authorization", "")
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        async def call_bot():
+            return await bot_adapter.process_activity(activity, auth_header, bot_logic)
+
+        result = loop.run_until_complete(call_bot())
+        loop.close()
+
+        return "", 200
+
     except Exception as e:
-        logger.error(f"Erreur: {e}")
+        logger.exception("Erreur /api/messages :")
         return jsonify({"error": str(e)}), 500
 
-async def bot_logic(context):
-    """Logique de votre bot"""
-    if context.activity.type == "message":
-        await context.send_activity(f"Bot dit: Vous avez dit '{context.activity.text}'")
-    elif context.activity.type == "event" and context.activity.name == "newsSelected":
-        news = context.activity.value
-        await context.send_activity(f"📰 Article sélectionné: {news['title']}")
 
 # ============================================
 # CLASSIFICATION AVEC VALIDATION

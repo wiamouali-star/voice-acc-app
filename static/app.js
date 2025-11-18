@@ -366,15 +366,14 @@ function displayArticles(articles, topic) {
                     </div>
                     <div class="article-actions">
                         <button
-                        class="chat-btn"
-                        onclick="openChatForArticle(
-                            '${articleId}',
-                            '${title.replace(/'/g, "\\'")}',
-                            '${link.replace(/'/g, "\\'")}'
-                        )">
-                        💬 Discuter avec le bot
+                            class="chat-btn"
+                            data-article-id="${articleId}"
+                            data-article-title="${encodeURIComponent(title)}"
+                            data-article-url="${encodeURIComponent(link)}"
+                            data-article-summary="${encodeURIComponent(summary)}"
+                            onclick="openChatForArticle(this)">
+                            💬 Discuter avec le bot
                         </button>
-
                     </div>
                 </div>
             </div>
@@ -664,54 +663,57 @@ async function initializeApp() {
 }
 
 
-async function openChatForArticle(id, title, url) {
-    console.log('💬 Ouverture du chat pour l\'article:', { id, title, url });
-    
+async function openChatForArticle(buttonEl) {
+    console.log('💬 Ouverture du chat pour l\'article via data-*');
+
     try {
+        const card = buttonEl.closest('.article-card');
+        const id = card?.dataset.articleId || 'article_' + Date.now();
+
+        const title = decodeURIComponent(buttonEl.dataset.articleTitle || '');
+        const url = decodeURIComponent(buttonEl.dataset.articleUrl || '');
+        const summary = decodeURIComponent(buttonEl.dataset.articleSummary || '');
+
+        console.log('📰 Article sélectionné:', { id, title, url, summary });
+
         // Afficher le modal
         const modal = document.getElementById('webchat-modal');
         const container = document.getElementById('webchat-container');
-        
+
         if (!modal || !container) {
             console.error('❌ Éléments WebChat non trouvés');
             return;
         }
-        
+
         modal.style.display = 'block';
-        
-        // Vider le conteneur précédent
         container.innerHTML = '<div style="padding:20px;text-align:center;">Chargement du chatbot...</div>';
-        
+
         // Récupérer le token depuis le backend Flask
         const response = await fetch('/api/bot-token');
-        
         if (!response.ok) {
             throw new Error(`Erreur HTTP: ${response.status}`);
         }
-        
         const data = await response.json();
-        
         if (!data.token) {
             throw new Error('Token non reçu du serveur');
         }
-        
+
         console.log('✅ Token Direct Line reçu');
-        
+
         const { createDirectLine, createStore, renderWebChat } = window.WebChat;
-        
-        // Données de l'article
-        const selectedNews = { 
-            id: id, 
-            title: title, 
-            url: url,
+
+        const selectedNews = {
+            id,
+            title,
+            url,
+            summary,
             timestamp: new Date().toISOString()
         };
-        
-        // Configuration du store pour envoyer l'événement
+
         const store = createStore({}, ({ dispatch }) => next => action => {
             if (action.type === 'DIRECT_LINE/CONNECT_FULFILLED') {
-                console.log('🚀 Connexion Direct Line établie, envoi de l\'événement...');
-                
+                console.log('🚀 Connexion Direct Line établie, envoi de l\'événement newsSelected...');
+
                 dispatch({
                     type: 'WEB_CHAT/SEND_EVENT',
                     payload: {
@@ -722,32 +724,27 @@ async function openChatForArticle(id, title, url) {
             }
             return next(action);
         });
-        
-        // Options de style
+
         const styleOptions = {
             bubbleBackground: 'rgba(0, 120, 215, 0.1)',
             bubbleFromUserBackground: 'rgba(0, 120, 215, 0.2)',
             hideUploadButton: true,
             sendBoxBackground: '#f0f0f0'
         };
-        
-        // Rendre WebChat
+
         renderWebChat({
-            directLine: createDirectLine({ 
-                token: data.token 
-            }),
-            store: store,
-            styleOptions: styleOptions,
+            directLine: createDirectLine({ token: data.token }),
+            store,
+            styleOptions,
             userID: 'user-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
             username: 'Utilisateur Actualités',
             locale: 'fr-FR'
         }, container);
-        
+
         console.log('✅ WebChat initialisé avec succès');
-        
+
     } catch (error) {
         console.error('❌ Erreur initialisation WebChat:', error);
-        
         const container = document.getElementById('webchat-container');
         if (container) {
             container.innerHTML = `
@@ -755,12 +752,12 @@ async function openChatForArticle(id, title, url) {
                     <h3>❌ Erreur de connexion</h3>
                     <p>Impossible de se connecter au chatbot.</p>
                     <p><small>${error.message}</small></p>
-                    <button onclick="this.parentElement.innerHTML=''">Réessayer</button>
                 </div>
             `;
         }
     }
 }
+
 
 function initializeChatModal() {
   const closeBtn = document.getElementById('webchat-close');
@@ -775,3 +772,6 @@ function initializeChatModal() {
     });
   }
 }
+
+
+
