@@ -773,5 +773,58 @@ function initializeChatModal() {
   }
 }
 
+let selectedArticle = null;
+
+function onClickDiscuss(article) {
+    selectedArticle = article; // { title, summary, link... }
+    openChatPanel(article);
+}
+
+async function sendChatMessage() {
+    const input = document.getElementById("chat-input");
+    const text = input.value.trim();
+    if (!text || !selectedArticle) return;
+
+    // Afficher le message de l'utilisateur dans le chat
+    addMessageToChat("user", text);
+    input.value = "";
+
+    try {
+        const res = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                message: text,
+                article: {
+                    title: selectedArticle.title,
+                    summary: selectedArticle.summary,
+                    url: selectedArticle.link
+                }
+            })
+        });
+
+        const data = await res.json();
+
+        if (data.reply) {
+            addMessageToChat("bot", data.reply);
+        } else if (data.error) {
+            addMessageToChat("bot", "Erreur : " + (data.message || data.error));
+        }
+
+    } catch (err) {
+        console.error(err);
+        addMessageToChat("bot", "Erreur de connexion au serveur.");
+    }
+}
+
+function addMessageToChat(sender, text) {
+    const container = document.getElementById("chat-messages");
+    const div = document.createElement("div");
+    div.className = sender === "user" ? "msg user" : "msg bot";
+    div.innerText = text;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+
 
 
