@@ -448,23 +448,36 @@ def debug_bot_config():
 # CONFIGURATION AZURE OPENAI (POUR LE CHAT UNIQUEMENT)
 # ============================================
 
+# ============================================
+# CONFIGURATION AZURE OPENAI (POUR LE CHAT UNIQUEMENT)
+# ============================================
+
 # Configuration Azure OpenAI pour le chat
 try:
     from openai import AzureOpenAI
     
-    # Configuration Azure OpenAI
+    # Configuration Azure OpenAI - Variables REQUISES
     azure_openai_key = os.getenv("AZURE_OPENAI_API_KEY")
     azure_openai_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+    
+    # Variables OPTIONNELLES avec valeurs par défaut
+    azure_openai_api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
+    azure_openai_deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4")  # ✅ CORRIGÉ
     
     if all([azure_openai_key, azure_openai_endpoint]):
         azure_openai_client = AzureOpenAI(
             api_key=azure_openai_key,
+            api_version=azure_openai_api_version,  # ✅ AJOUTÉ
             azure_endpoint=azure_openai_endpoint
         )
         logger.info("✅ Azure OpenAI client initialized successfully for chat")
+        logger.info(f"📝 Using deployment: {azure_openai_deployment_name}")
     else:
         azure_openai_client = None
-        logger.warning("⚠️ Azure OpenAI configuration missing, chat will use Mistral")
+        missing_vars = []
+        if not azure_openai_key: missing_vars.append("AZURE_OPENAI_API_KEY")
+        if not azure_openai_endpoint: missing_vars.append("AZURE_OPENAI_ENDPOINT")
+        logger.warning(f"⚠️ Azure OpenAI configuration missing: {missing_vars}")
         
 except ImportError:
     logger.warning("❌ OpenAI package not installed, Azure OpenAI chat features disabled")
@@ -472,6 +485,7 @@ except ImportError:
 except Exception as e:
     logger.error(f"❌ Failed to initialize Azure OpenAI client: {e}")
     azure_openai_client = None
+    
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -509,9 +523,9 @@ def chat_on_article():
                     f"Résumé : {summary}\n"
                 )
 
-                # Appel Azure OpenAI
+                # ✅ CORRECTION : Utilisation de la variable définie
                 response = azure_openai_client.chat.completions.create(
-                    model=azure_openai_deployment,
+                    model=azure_openai_deployment_name,  # ✅ CORRIGÉ
                     messages=[
                         {"role": "system", "content": prompt_system},
                         {"role": "user", "content": (
@@ -558,6 +572,42 @@ def chat_on_article():
     except Exception as e:
         logger.exception("❌ Erreur dans /api/chat")
         return jsonify({"error": "internal_error", "message": str(e)}), 500
+
+@app.route('/api/debug-azure-openai')
+def debug_azure_openai():
+    """Route de débogage pour Azure OpenAI"""
+    debug_info = {
+        'azure_openai_configured': azure_openai_client is not None,
+        'required_variables': {
+            'AZURE_OPENAI_API_KEY': bool(os.getenv("AZURE_OPENAI_API_KEY")),
+            'AZURE_OPENAI_ENDPOINT': bool(os.getenv("AZURE_OPENAI_ENDPOINT"))
+        },
+        'optional_variables': {
+            'AZURE_OPENAI_API_VERSION': os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01 (default)"),
+            'AZURE_OPENAI_DEPLOYMENT_NAME': os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4 (default)")
+        },
+        'used_config': {
+            'api_version': azure_openai_api_version,
+            'deployment_name': azure_openai_deployment_name
+        }
+    }
+    
+    # Test de connexion si configuré
+    if azure_openai_client:
+        try:
+            test_response = azure_openai_client.chat.completions.create(
+                model=azure_openai_deployment_name,
+                messages=[{"role": "user", "content": "Test de connexion - réponds par 'OK'"}],
+                max_tokens=5
+            )
+            debug_info['connection_test'] = 'success'
+            debug_info['test_response'] = test_response.choices[0].message.content
+        except Exception as e:
+            debug_info['connection_test'] = 'failed'
+            debug_info['error'] = str(e)
+    
+    return jsonify(debug_info)
+    
 
 def generate_response_with_mistral(title, summary, url, user_message):
     """Génère une réponse avec Mistral (fallback)"""
