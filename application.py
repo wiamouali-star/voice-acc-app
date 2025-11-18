@@ -452,11 +452,11 @@ from botbuilder.core import BotFrameworkAdapter, BotFrameworkAdapterSettings, Tu
 from botbuilder.schema import Activity
 import asyncio
 
-MICROSOFT_APP_ID = os.getenv("MICROSOFT_APP_ID", "")
-MICROSOFT_APP_PASSWORD = os.getenv("MICROSOFT_APP_PASSWORD", "")
+MICROSOFT_APP_ID = ""
+MICROSOFT_APP_PASSWORD = ""
 
-bot_settings = BotFrameworkAdapterSettings(MICROSOFT_APP_ID, MICROSOFT_APP_PASSWORD)
-bot_adapter = BotFrameworkAdapter(bot_settings)
+settings = BotFrameworkAdapterSettings(app_id=None, app_password=None)
+bot_adapter = BotFrameworkAdapter(settings)
 
 # Mémoire simple par conversation
 conversation_articles = {}
@@ -560,7 +560,7 @@ def messages():
     try:
         body = request.get_json()
         activity = Activity().deserialize(body)
-        auth_header = request.headers.get("Authorization", "")
+        auth_header = ""
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
