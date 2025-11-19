@@ -488,13 +488,14 @@ def chat_on_article():
                 RÉPONSE:
                 """
 
-                # ✅ APPROCHE ALTERNATIVE : Utiliser completion au lieu de chat
-                from mistralai.models import CompletionResponse
-                
+                # ✅ Compatible avec mistralai 0.0.7
+                from mistralai.client import MistralClient
+                from mistralai.models.chat_completion import ChatMessage
+
                 chat_response = mistral.chat(
                     model="mistral-small",
                     messages=[
-                        {"role": "user", "content": prompt}
+                        ChatMessage(role="user", content=prompt)
                     ],
                     temperature=0.3,
                     max_tokens=200
