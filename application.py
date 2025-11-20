@@ -501,7 +501,6 @@ def chat_on_article():
             """
 
             response = client.chat.completions.create(
-                deployment_id=AZURE_OPENAI_DEPLOYMENT,
                 model=AZURE_OPENAI_DEPLOYMENT,
                 messages=[
                     {"role": "user", "content": prompt}
