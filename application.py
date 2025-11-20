@@ -463,84 +463,74 @@ def chat_on_article():
 
         reply_text = ""
         
-        # UTILISER MISTRAL DIRECTEMENT
-        if mistral:
-            logger.info("🤖 Using Mistral AI for chat response")
-            
-            try:
-                # ✅ SOLUTION : Utiliser une approche différente qui évite model_dump
-                prompt = f"""
-                Tu es un assistant qui discute d'actualités en français.
 
-                ARTICLE À ANALYSER:
-                Titre: {title}
-                Résumé: {summary}
+        # UTILISER AZURE OPENAI DIRECTEMENT
+        try:
+            from openai import AzureOpenAI
+            AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
+            AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
+            AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-35-turbo")
 
-                QUESTION DE L'UTILISATEUR:
-                {user_message}
+            if not AZURE_OPENAI_API_KEY or not AZURE_OPENAI_ENDPOINT:
+                raise Exception("Azure OpenAI configuration manquante")
 
-                INSTRUCTIONS:
-                - Réponds en français
-                - Sois concis (2-3 phrases maximum)
-                - Utilise seulement les informations de l'article
-                - Si tu ne sais pas, dis-le clairement
-
-                RÉPONSE:
-                """
-
-                # ✅ APPROCHE ALTERNATIVE : Utiliser completion au lieu de chat
-                from mistralai.models import CompletionResponse
-                
-                chat_response = mistral.chat(
-                    model="mistral-small",
-                    messages=[
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.3,
-                    max_tokens=200
-                )
-                
-                # ✅ EXTRACTION ROBUSTE : Gérer tous les cas d'erreur
-
-                try:
-                    # Normal extraction if available
-                    if hasattr(chat_response, 'choices') and chat_response.choices:
-                        choice = chat_response.choices[0]
-                        if hasattr(choice, 'message') and hasattr(choice.message, 'content'):
-                            reply_text = choice.message.content
-                        elif hasattr(choice, 'content'):
-                            reply_text = choice.content
-                        else:
-                            reply_text = str(chat_response)
-                    elif hasattr(chat_response, 'content'):
-                        reply_text = chat_response.content
-                    else:
-                        reply_text = str(chat_response)
-                except Exception as e:
-                    logger.warning(f"Failed to extract Mistral response: {e}")
-                    reply_text = str(chat_response)
-                
-                # Nettoyer la réponse si c'est un dict
-                if isinstance(reply_text, dict):
-                    reply_text = reply_text.get('content', str(reply_text))
-                    
-                logger.info("✅ Mistral AI response generated successfully")
-                    
-            except Exception as e:
-                logger.error(f"❌ Mistral AI chat error: {e}")
-                # Réponse de fallback intelligente
-                reply_text = f"🤖 À propos de l'article \"{title}\":\n\n{summary}\n\nEn réponse à votre question \"{user_message}\", je dirais que cet article présente des informations intéressantes que vous pouvez découvrir en le lisant directement."
-        
-        # FALLBACK : Réponse simple
-        else:
-            logger.warning("⚠️ Mistral AI not available, using basic fallback")
-            reply_text = (
-                f"📰 Article: {title}\n"
-                f"📝 Résumé: {summary}\n\n"
-                f"❓ Votre question: {user_message}\n\n"
-                "🔧 Fonction d'analyse temporairement indisponible. "
-                "Vous pouvez lire l'article directement via le lien fourni."
+            client = AzureOpenAI(
+                api_key=AZURE_OPENAI_API_KEY,
+                api_version="2023-05-15",
+                azure_endpoint=AZURE_OPENAI_ENDPOINT
             )
+
+            prompt = f"""
+            Tu es un assistant qui discute d'actualités en français.
+
+            ARTICLE À ANALYSER:
+            Titre: {title}
+            Résumé: {summary}
+
+            QUESTION DE L'UTILISATEUR:
+            {user_message}
+
+            INSTRUCTIONS:
+            - Réponds en français
+            - Sois concis (2-3 phrases maximum)
+            - Utilise seulement les informations de l'article
+            - Si tu ne sais pas, dis-le clairement
+
+            RÉPONSE:
+            """
+
+            response = client.chat.completions.create(
+                deployment_id=AZURE_OPENAI_DEPLOYMENT,
+                model=AZURE_OPENAI_DEPLOYMENT,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=200
+            )
+
+            # Extraction de la réponse
+            if hasattr(response, "choices") and response.choices:
+                choice = response.choices[0]
+                if hasattr(choice, "message") and hasattr(choice.message, "content"):
+                    reply_text = choice.message.content
+                elif hasattr(choice, "content"):
+                    reply_text = choice.content
+                else:
+                    reply_text = str(response)
+            elif hasattr(response, "content"):
+                reply_text = response.content
+            else:
+                reply_text = str(response)
+
+            if isinstance(reply_text, dict):
+                reply_text = reply_text.get("content", str(reply_text))
+
+            logger.info("✅ Azure OpenAI response generated successfully")
+
+        except Exception as e:
+            logger.error(f"❌ Azure OpenAI chat error: {e}")
+            reply_text = f"🤖 À propos de l'article \"{title}\":\n\n{summary}\n\nEn réponse à votre question \"{user_message}\", je dirais que cet article présente des informations intéressantes que vous pouvez découvrir en le lisant directement."
 
         return jsonify({
             "reply": reply_text,
